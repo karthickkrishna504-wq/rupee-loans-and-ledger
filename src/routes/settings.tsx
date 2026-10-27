@@ -35,7 +35,7 @@ function Settings() {
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     (["transactions", "accounts", "borrowings", "lendings", "emiLoans", "budgets", "assets", "goals"] as const).forEach((k) => {
-      const rows = (db[k] as unknown as Record<string, unknown>[]).map((r) => ({ ...r, ...("date" in r ? { date: fmtDate(r.date as string) } : {}) }));
+      const rows = (db[k] as unknown as Record<string, unknown>[]).map((r) => ({ ...r, ...("date" in r ? { date: fmtDate(r["date"] as string) } : {}) }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), k);
     });
     XLSX.writeFile(wb, `khata-backup-${fmtDate(todayISO())}.xlsx`);

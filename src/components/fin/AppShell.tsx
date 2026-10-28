@@ -47,7 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Button>
       </aside>
 
-      <header className="sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-background/85 px-4 py-3 backdrop-blur md:absolute md:right-8 md:top-5 md:border-0 md:bg-transparent">
+      <header className="sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-background/85 px-4 py-3 backdrop-blur md:absolute md:right-3 md:top-5 md:border-0 md:bg-transparent md:px-0">
         <div className="flex min-w-0 items-center gap-2 md:hidden">
           <div className="grid size-7 place-items-center rounded-md bg-primary text-sm font-bold text-primary-foreground">₹</div>
           <span className="text-sm font-bold">Khata ERP</span>

@@ -204,7 +204,6 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
             </>
           )}
 
-          <Field label="Description" className="sm:col-span-2"><Input value={d.description ?? ""} onChange={(e) => set({ description: e.target.value })} /></Field>
           <Field label="Related person"><Input value={d.relatedPerson ?? ""} onChange={(e) => set({ relatedPerson: e.target.value })} /></Field>
           <Field label="Reference (UTR / receipt)"><Input value={d.referenceNumber ?? ""} onChange={(e) => set({ referenceNumber: e.target.value })} /></Field>
 

@@ -185,3 +185,10 @@
 @media (min-width: 768px) { .quick-entry-fab { bottom: 24px; } }
 @media (max-width: 767px) { .dashboard-content[data-full="true"] .chart-gallery[data-tab="Overview"] > :not(:nth-child(1)):not(:nth-child(3)) { display:none; } }
 @media (prefers-reduced-motion: no-preference) { .dashboard-content { animation: dashboard-in .22s ease-out; } @keyframes dashboard-in { from { opacity: .5; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } } }
+
+@media (max-width: 767px) {
+ .dashboard-tabs { gap: 0; }
+ .dashboard-tabs > button { flex: 1 0 auto; padding-inline: 9px; font-size: 10px; gap: 3px; }
+ .wealth-banner { padding-block: 18px; }
+}
+@media (min-width: 768px) { .dashboard-tabs { max-width: 640px; } }

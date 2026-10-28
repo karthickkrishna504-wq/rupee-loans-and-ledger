@@ -27,8 +27,8 @@ export const Route = createFileRoute("/")({
 });
 
 const C = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
-const tip = { contentStyle: { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12 }, labelStyle: { color: "var(--muted-foreground)" }, formatter: (v: number) => `${inr(v)} · ${chartMoney(v)}` };
-const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false };
+const tip = { contentStyle: { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }, labelStyle: { color: "var(--muted-foreground)" }, formatter: (v: number) => `${inr(v)} · ${chartMoney(v)}` };
+const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false, minTickGap: 20 };
 
 function monthsFor(period: string, txs: Transaction[], today: string) {
   if (period.startsWith("FY:")) { const y = Number(period.slice(3)); return Array.from({ length: 12 }, (_, i) => monthKey(addMonths(`${y}-04-01`, i))); }
@@ -116,7 +116,7 @@ function Dashboard() {
         title="Executive dashboard"
         subtitle={`${plabel} · as of ${today.split("-").reverse().join("-")}`}
         actions={
-          <Select value={period} onChange={(e) => setPeriod(e.target.value)} className="w-48">
+          <Select value={period} onChange={(e) => setPeriod(e.target.value)} className="w-48 md:mr-8">
             <option value="ALL">All time</option>
             <optgroup label="Financial year">{opts.fys.map((y) => <option key={y} value={`FY:${y}`}>{fyLabel(y)}</option>)}</optgroup>
             <optgroup label="Month">{opts.months.map((m) => <option key={m} value={`M:${m}`}>{monthLabel(m)}</option>)}</optgroup>
@@ -168,7 +168,7 @@ function Dashboard() {
           <BarChart data={emi12}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="month" {...axis} /><YAxis {...axis} tickFormatter={chartMoney} width={60} /><Tooltip {...tip} /><Bar dataKey="EMI" fill={C[3]} radius={[6, 6, 0, 0]} /></BarChart>
         </Chart>
         <Chart title="Cash inflow vs outflow">
-          <AreaChart data={series}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="month" {...axis} /><YAxis {...axis} tickFormatter={chartMoney} width={60} /><Tooltip {...tip} /><Legend wrapperStyle={{ fontSize: 12 }} /><Area dataKey="Inflow" stroke={C[0]} fill={C[0]} fillOpacity={0.15} /><Area dataKey="Outflow" stroke={C[1]} fill={C[1]} fillOpacity={0.15} /></AreaChart>
+          <AreaChart data={series}><defs><linearGradient id="cash-inflow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C[0]} stopOpacity={0.35} /><stop offset="100%" stopColor={C[0]} stopOpacity={0.02} /></linearGradient><linearGradient id="cash-outflow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C[1]} stopOpacity={0.25} /><stop offset="100%" stopColor={C[1]} stopOpacity={0.02} /></linearGradient></defs><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="month" {...axis} /><YAxis {...axis} tickFormatter={chartMoney} width={60} /><Tooltip {...tip} /><Legend wrapperStyle={{ fontSize: 12 }} /><Area dataKey="Inflow" stroke={C[0]} fill="url(#cash-inflow)" /><Area dataKey="Outflow" stroke={C[1]} fill="url(#cash-outflow)" /></AreaChart>
         </Chart>
         <Chart title="Assets vs liabilities">
           <BarChart data={[

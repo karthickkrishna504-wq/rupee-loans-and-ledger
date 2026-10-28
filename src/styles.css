@@ -14,6 +14,8 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+  --color-wealth-foreground: var(--wealth-foreground);
+  --color-wealth-muted: var(--wealth-muted);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -55,7 +57,7 @@
 
 /* Light: paper-white ledger */
 :root {
-  --radius: 0.75rem;
+  --radius: 0.5rem;
   --background: oklch(0.985 0.003 120);
   --foreground: oklch(0.18 0.01 150);
   --surface: oklch(0.965 0.005 120);
@@ -96,10 +98,10 @@
 
 /* Dark: Fold-style ink with electric lime */
 .dark {
-  --background: oklch(0.14 0.004 150);
+  --background: #090D16;
   --foreground: oklch(0.96 0.005 120);
   --surface: oklch(0.17 0.005 150);
-  --card: oklch(0.185 0.005 150);
+  --card: #111827;
   --card-foreground: oklch(0.96 0.005 120);
   --popover: oklch(0.2 0.006 150);
   --popover-foreground: oklch(0.96 0.005 120);
@@ -124,7 +126,7 @@
   --chart-3: oklch(0.74 0.12 235);
   --chart-4: oklch(0.82 0.15 78);
   --chart-5: oklch(0.7 0.14 300);
-  --sidebar: oklch(0.12 0.004 150);
+  --sidebar: #0c111c;
   --sidebar-foreground: oklch(0.9 0.005 120);
   --sidebar-primary: oklch(0.88 0.2 128);
   --sidebar-primary-foreground: oklch(0.16 0.02 140);
@@ -147,7 +149,7 @@
   select, input, textarea { font: inherit; }
 }
 
-@utility num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+@utility num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; }
 @utility field {
   height: 2.5rem; width: 100%; border-radius: var(--radius-md); border: 1px solid var(--color-input);
   background: var(--color-background); padding: 0 0.75rem; font-size: 0.875rem; color: var(--color-foreground); outline: none;
@@ -155,3 +157,38 @@
 }
 @utility panel { border-radius: var(--radius-xl); border: 1px solid var(--color-border); background: var(--color-card); }
 @utility glow { box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-primary) 30%, transparent), 0 20px 50px -20px color-mix(in oklab, var(--color-primary) 35%, transparent); }
+
+:root { --wealth-foreground: oklch(0.98 0.005 250); --wealth-muted: oklch(0.73 0.02 250); --wealth-gradient: linear-gradient(125deg, #142334, #1b263e 50%, #211c44); --fab-shadow: 0 8px 32px oklch(0 0 0 / 30%); }
+.wealth-banner { background: var(--wealth-gradient); color: var(--wealth-foreground); }
+.metric { border-top-width: 2px; }
+.metric-good { border-top-color: var(--success); } .metric-good .metric-icon { color: var(--success); }
+.metric-bad { border-top-color: var(--destructive); } .metric-bad .metric-icon { color: var(--destructive); }
+.metric-warn { border-top-color: var(--warning); } .metric-warn .metric-icon { color: var(--warning); }
+.metric-info { border-top-color: var(--chart-5); } .metric-info .metric-icon { color: var(--chart-5); }
+.metric-neutral .metric-icon { color: var(--muted-foreground); }
+.dashboard-tabs { scrollbar-width: none; } .dashboard-tabs::-webkit-scrollbar { display: none; }
+.tab-count { font-size: 9px; opacity: .65; }
+.quick-entry-fab { box-shadow: var(--fab-shadow); bottom: calc(76px + env(safe-area-inset-bottom)); }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Overview"] > :not(:nth-child(1)):not(:nth-child(3)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Debt & Lending"] > :not(:nth-child(4)):not(:nth-child(5)):not(:nth-child(6)):not(:nth-child(7)):not(:nth-child(10)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"] { grid-template-columns: minmax(0,1fr); }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="0"] > :not(:nth-child(1)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="1"] > :not(:nth-child(2)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="2"] > :not(:nth-child(3)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="3"] > :not(:nth-child(4)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="4"] > :not(:nth-child(5)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="5"] > :not(:nth-child(6)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="6"] > :not(:nth-child(7)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="7"] > :not(:nth-child(8)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="8"] > :not(:nth-child(9)) { display:none; }
+.dashboard-content[data-full="false"] .chart-gallery[data-tab="Analytics"][data-chart="9"] > :not(:nth-child(10)) { display:none; }
+@media (min-width: 768px) { .quick-entry-fab { bottom: 24px; } }
+@media (max-width: 767px) { .dashboard-content[data-full="true"] .chart-gallery[data-tab="Overview"] > :not(:nth-child(1)):not(:nth-child(3)) { display:none; } }
+@media (prefers-reduced-motion: no-preference) { .dashboard-content { animation: dashboard-in .22s ease-out; } @keyframes dashboard-in { from { opacity: .5; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } } }
+
+@media (max-width: 767px) {
+ .dashboard-tabs { gap: 0; }
+ .dashboard-tabs > button { flex: 1 0 auto; padding-inline: 9px; font-size: 10px; gap: 3px; }
+ .wealth-banner { padding-block: 18px; }
+}
+@media (min-width: 768px) { .dashboard-tabs { max-width: 640px; } }

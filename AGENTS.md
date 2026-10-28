@@ -13,3 +13,6 @@
 - All money figures derive from `src/lib/accountingEngine.ts` over the transactions list; never store computed balances/outstanding — keeps every screen consistent with the accounting rules.
 - Data persists in localStorage via `src/lib/store.ts` (`useDB`, `upsert`, `saveTx`); dates stored ISO, displayed DD-MM-YYYY via `src/lib/format.ts`.
 - Accounting rules are covered by `src/test/accounting.test.ts`; update it when rules change.
+- Dashboard tabs only partition presentation; calculations and portfolio metrics stay derived from the existing engine.
+- Global Quick Entry reuses TransactionDialog and saveTx so every entry retains the same validations and ledger normalization.
+- AI classification is advisory through a server function, constrained to existing transaction types/categories and classification fields; it never saves entries or changes money values.

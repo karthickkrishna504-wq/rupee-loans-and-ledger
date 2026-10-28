@@ -1,11 +1,11 @@
-import type { ReactNode, SelectHTMLAttributes, InputHTMLAttributes } from "react";
+import { Children, cloneElement, isValidElement, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+    <div className="mb-5 grid grid-cols-1 items-end gap-3 sm:flex sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-xl font-bold sm:text-2xl">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -58,7 +58,7 @@ export function Field({ label, children, className }: { label: string; children:
   return (
     <label className={cn("block", className)}>
       <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
+      {Children.map(children, (child) => isValidElement(child) && (child.type === Input || child.type === Select) ? cloneElement(child as React.ReactElement<{ "aria-label"?: string }>, { "aria-label": label }) : child)}
     </label>
   );
 }

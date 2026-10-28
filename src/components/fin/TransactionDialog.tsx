@@ -7,6 +7,10 @@ import { useDB, saveTx, uid } from "@/lib/store";
 import { TX_TYPES, txMeta, type Transaction, type TxType } from "@/lib/types";
 import { emiSchedule, loanSummary } from "@/lib/accountingEngine";
 import { inr, todayISO } from "@/lib/format";
+import { useServerFn } from "@tanstack/react-start";
+import { Sparkles, LoaderCircle } from "lucide-react";
+import { suggestTransaction } from "@/lib/suggestions.functions";
+import type { TransactionSuggestion } from "@/lib/transactionSuggestion";
 
 type Draft = Partial<Transaction> & { type: TxType };
 
@@ -18,6 +22,26 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
   const db = useDB();
   const today = todayISO();
   const [d, setD] = useState<Draft>(blank());
+  const suggest = useServerFn(suggestTransaction);
+  const [suggestion, setSuggestion] = useState<TransactionSuggestion | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestionError, setSuggestionError] = useState("");
+  useEffect(() => { if (open) { setSuggestion(null); setSuggestionError(""); } }, [open]);
+  async function getSuggestion() {
+    setSuggesting(true); setSuggestion(null); setSuggestionError("");
+    try {
+      const result = await suggest({ data: { description: d.description ?? "", config: { ...db.config, people: [] } } });
+      if (result.error) setSuggestionError(result.error);
+      else setSuggestion(result.suggestion);
+    } catch { setSuggestionError("AI suggestions are unavailable. Your entry has not changed."); }
+    finally { setSuggesting(false); }
+  }
+  function applySuggestion() {
+    if (!suggestion) return;
+    const tags = Object.fromEntries(Object.entries(suggestion).map(([k, v]) => [k, v ?? undefined]));
+    set({ ...tags, relatedBorrowingId: undefined, relatedLendingId: undefined, relatedEmiId: undefined } as Partial<Draft>);
+    setSuggestion(null);
+  }
   useEffect(() => { if (open) setD({ ...blank(db.accounts[0]?.id), ...initial } as Draft); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const meta = txMeta(d.type);
@@ -103,6 +127,12 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader><DialogTitle>{d.id ? "Edit transaction" : "New transaction"}</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="border-b pb-4 sm:col-span-2">
+            <Field label="Transaction description"><Input value={d.description ?? ""} placeholder="e.g. Paid ₹1,200 for office internet" onChange={(e) => { set({ description: e.target.value }); setSuggestion(null); }} /></Field>
+            <div className="mt-2 flex items-center justify-between gap-2"><span className="text-[10px] text-muted-foreground">AI-powered suggestions</span><Button variant="secondary" size="sm" disabled={suggesting || (d.description?.trim().length ?? 0) < 3} onClick={getSuggestion}>{suggesting ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{suggesting ? "Suggesting…" : "Suggest details"}</Button></div>
+            {suggestionError && <p role="alert" className="mt-2 text-xs text-destructive">{suggestionError}</p>}
+            {suggestion && <div className="mt-3 rounded-md border border-primary/20 bg-primary/5 p-3"><div className="text-xs font-semibold">{suggestion.type} · {suggestion.mainCategory || "Uncategorised"}</div><div className="mt-2 flex flex-wrap gap-1">{[suggestion.personalOrBusiness, suggestion.essentialOrDiscretionary, suggestion.needOrWant, suggestion.recurringOrOneTime, suggestion.fixedOrVariable].filter(Boolean).map((t) => <span key={t} className="rounded-full bg-muted px-2 py-1 text-[10px]">{t}</span>)}</div><Button size="sm" className="mt-3" onClick={applySuggestion}>Apply suggestion</Button></div>}
+          </div>
           <Field label="Type" className="sm:col-span-2">
             <Select value={d.type} onChange={(e) => set({ type: e.target.value as TxType, relatedBorrowingId: undefined, relatedLendingId: undefined, relatedEmiId: undefined, mainCategory: "", subCategory: "" })}>
               {TX_TYPES.map((t) => <option key={t.type}>{t.type}</option>)}
@@ -174,7 +204,6 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
             </>
           )}
 
-          <Field label="Description" className="sm:col-span-2"><Input value={d.description ?? ""} onChange={(e) => set({ description: e.target.value })} /></Field>
           <Field label="Related person"><Input value={d.relatedPerson ?? ""} onChange={(e) => set({ relatedPerson: e.target.value })} /></Field>
           <Field label="Reference (UTR / receipt)"><Input value={d.referenceNumber ?? ""} onChange={(e) => set({ referenceNumber: e.target.value })} /></Field>
 

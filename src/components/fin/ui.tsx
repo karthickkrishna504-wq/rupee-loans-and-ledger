@@ -1,4 +1,4 @@
-import type { ReactNode, SelectHTMLAttributes, InputHTMLAttributes } from "react";
+import { Children, cloneElement, isValidElement, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
@@ -58,7 +58,7 @@ export function Field({ label, children, className }: { label: string; children:
   return (
     <label className={cn("block", className)}>
       <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
+      {Children.map(children, (child) => isValidElement(child) && (child.type === Input || child.type === Select) ? cloneElement(child as React.ReactElement<{ "aria-label"?: string }>, { "aria-label": label }) : child)}
     </label>
   );
 }

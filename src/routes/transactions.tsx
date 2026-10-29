@@ -16,6 +16,8 @@ export const Route = createFileRoute("/transactions")({
       { name: "description", content: "Searchable daily register of every rupee in and out, with smart loan-linked entries." },
       { property: "og:title", content: "Transaction Register — Khata ERP" },
       { property: "og:description", content: "Master daily transaction register with 22 strict transaction types." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Register,

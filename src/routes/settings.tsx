@@ -14,6 +14,8 @@ export const Route = createFileRoute("/settings")({
       { name: "description", content: "Validation data loader, JSON/Excel backups and editable categories." },
       { property: "og:title", content: "Settings & Backup — Khata ERP" },
       { property: "og:description", content: "Manage data, backups and master configuration." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Settings,

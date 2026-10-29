@@ -15,6 +15,8 @@ export const Route = createFileRoute("/accounts")({
       { name: "description", content: "Live bank, cash and wallet balances with statement reconciliation." },
       { property: "og:title", content: "Bank & Cash Accounts — Khata ERP" },
       { property: "og:description", content: "Opening + inflows − outflows ± transfers = closing, reconciled against your bank statement." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Accounts,

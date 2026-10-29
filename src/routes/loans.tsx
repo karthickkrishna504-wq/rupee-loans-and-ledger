@@ -17,6 +17,8 @@ export const Route = createFileRoute("/loans")({
       { name: "description", content: "Interest-only borrowings, money lent, interest ledgers and EMI amortisation schedules." },
       { property: "og:title", content: "Loans, Lending & EMIs — Khata ERP" },
       { property: "og:description", content: "Track every private loan and EMI with automatic interest ledgers." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Loans,

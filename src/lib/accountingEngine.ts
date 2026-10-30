@@ -138,12 +138,12 @@ export function periodInterest(l: PrivateLoan, principal: number, start: string,
   }
 }
 
-export function interestLedger(l: PrivateLoan, txs: Transaction[], today: string): LedgerRow[] {
+export function interestLedger(l: PrivateLoan, txs: Transaction[], today: string, horizon: string = today): LedgerRow[] {
   const moves = principalMovements(l, txs);
   const rows: LedgerRow[] = [];
   for (let i = 0; i < 600; i++) {
     const ps = addMonths(l.startDate, i);
-    if (ps > today) break;
+    if (ps > horizon) break;
     const open = principalAt(moves, ps);
     if (open <= 0 && i > 0) break;
     const pe = addDays(addMonths(l.startDate, i + 1), -1);
@@ -195,11 +195,76 @@ export function loanSummary(l: PrivateLoan, txs: Transaction[], today: string) {
   const maturityPassed = !!l.maturityDate && l.maturityDate < today && outstanding > 0;
   const status: "ACTIVE" | "OVERDUE" | "CLOSED" =
     outstanding <= 0 && moves.length ? "CLOSED" : overdueInterest > 0 || maturityPassed ? "OVERDUE" : "ACTIVE";
-  const monthlyInterest = periodInterest(l, outstanding, today, addDays(addMonths(today, 1), -1));
+  const monthlyInterest = outstanding > 0 ? periodInterest(l, outstanding, today, addDays(addMonths(today, 1), -1)) : 0;
+  const interestAccrued = r2(ledger.reduce((s, r) => s + r.interestAccrued, 0));
+  const oldestOverdue = ledger.find((r) => r.status === "OVERDUE");
+  const daysOverdue = oldestOverdue ? daysBetween(oldestOverdue.dueDate, today) : 0;
   return {
     original: l.originalPrincipal, additional: Math.max(0, added - l.originalPrincipal), repaid: settled, outstanding,
     ledger, moves, overdueInterest, unpaidInterest, interestSettled, nextDue, status, monthlyInterest,
+    interestAccrued, daysOverdue, risk: riskOf(daysOverdue, status),
   };
+}
+
+/** Borrower risk based on the age of the oldest unpaid (overdue) interest period: 30 / 90 / 180 day buckets. */
+export type RiskLevel = "Low" | "Watch" | "Moderate" | "High" | "Severe" | "Closed";
+export function riskOf(daysOverdue: number, status: string = "ACTIVE"): RiskLevel {
+  if (status === "CLOSED") return "Closed";
+  if (daysOverdue <= 0) return "Low";
+  if (daysOverdue <= 30) return "Watch";
+  if (daysOverdue <= 90) return "Moderate";
+  if (daysOverdue <= 180) return "High";
+  return "Severe";
+}
+
+/** Cash needed to fully settle a loan on a date: outstanding principal + unpaid interest of completed
+ *  periods + pro-rata interest for the running period. Compared against a lender-confirmed quote. */
+export function settlementQuote(l: PrivateLoan, txs: Transaction[], date: string, lenderQuote?: number) {
+  const moves = principalMovements(l, txs);
+  const principal = principalAt(moves, date);
+  const rows = interestLedger(l, txs, date);
+  let unpaid = 0, running = 0;
+  for (const r of rows) {
+    const bal = r.interestAccrued - r.amountPaidOrReceived;
+    if (r.periodEnd < date) unpaid += bal;
+    else {
+      const total = daysBetween(r.periodStart, r.periodEnd) + 1;
+      const elapsed = Math.min(total, daysBetween(r.periodStart, date) + 1);
+      running += Math.max(0, r2((r.interestAccrued * elapsed) / total) - r.amountPaidOrReceived);
+    }
+  }
+  const computed = r2(principal + unpaid + running);
+  return {
+    principal, unpaidInterest: r2(unpaid), runningInterest: r2(running), computed,
+    lenderQuote, difference: lenderQuote === undefined ? undefined : r2(lenderQuote - computed),
+  };
+}
+
+export interface CalendarRow extends LedgerRow { loan: PrivateLoan; calendarStatus: LedgerStatus }
+/** Rolling interest calendar: unpaid past periods + current month + next `months` months for all loans. */
+export function interestCalendar(loans: PrivateLoan[], txs: Transaction[], today: string, months = 12): CalendarRow[] {
+  const from = today.slice(0, 8) + "01";
+  const to = addDays(addMonths(from, months + 1), -1);
+  const out: CalendarRow[] = [];
+  for (const l of loans) {
+    const s = loanSummary(l, txs, today);
+    const rows = interestLedger(l, txs, today, to);
+    for (const r of rows) {
+      const inWindow = r.dueDate >= from && r.dueDate <= to;
+      const unpaidPast = r.dueDate < from && r.balancePayableOrReceivable > 0.005;
+      if (!inWindow && !unpaidPast) continue;
+      out.push({ ...r, loan: l, calendarStatus: s.status === "CLOSED" && r.balancePayableOrReceivable <= 0.005 ? "CLOSED" : r.status });
+    }
+  }
+  return out.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+/** Total EMI interest under the current plan vs the same loan without any prepayments. */
+export function emiInterestSaved(loan: EmiLoan, txs: Transaction[]) {
+  const total = (rows: EmiRow[]) => rows.reduce((s, r) => s + r.interest, 0);
+  const now = emiSchedule(loan, txs);
+  const base = emiSchedule(loan, txs.filter((t) => !(t.relatedEmiId === loan.loanId && t.type === "Principal Repayment on Borrowing")));
+  return { saved: r2(total(base.rows) - total(now.rows)), monthsSaved: base.rows.length - now.rows.length };
 }
 
 /* ---------------- EMI amortisation (PMT / IPMT / PPMT) ---------------- */

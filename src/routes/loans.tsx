@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { useDB, upsert, saveTx, uid } from "@/lib/store";
-import { emiSchedule, loanSummary, pmt } from "@/lib/accountingEngine";
+import { useDB, upsert, saveTx, uid, setDB } from "@/lib/store";
+import { emiInterestSaved, emiSchedule, loanSummary, pmt } from "@/lib/accountingEngine";
+import { InterestCalendarView, PrincipalRegister, RiskBadge, SettleDialog, SettlementPlanner } from "@/components/fin/LoanTools";
 import { fmtDate, inr, todayISO } from "@/lib/format";
 import type { CalcMethod, EmiLoan, PrivateLoan, Transaction } from "@/lib/types";
 import { Badge, Field, Input, PageHeader, Panel, Select, Stat, Table } from "@/components/fin/ui";
@@ -24,7 +25,7 @@ export const Route = createFileRoute("/loans")({
   component: Loans,
 });
 
-type Tab = "BORROWED" | "LENT" | "EMI";
+type Tab = "BORROWED" | "LENT" | "EMI" | "CAL" | "REG";
 
 function Loans() {
   const db = useDB();
@@ -34,6 +35,14 @@ function Loans() {
   const [txOpen, setTxOpen] = useState(false);
   const [txInit, setTxInit] = useState<Partial<Transaction>>();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<PrivateLoan>();
+  const [settling, setSettling] = useState<PrivateLoan>();
+  const del = (l: PrivateLoan) => {
+    if (!confirm(`Delete ${l.loanId} (${l.counterparty}) and all its linked transactions?`)) return;
+    const key = l.kind === "BORROWED" ? "relatedBorrowingId" : "relatedLendingId";
+    setDB((d) => ({ ...d, [l.kind === "BORROWED" ? "borrowings" : "lendings"]: (l.kind === "BORROWED" ? d.borrowings : d.lendings).filter((x) => x.loanId !== l.loanId), transactions: d.transactions.filter((t) => t[key] !== l.loanId) }));
+    toast.success("Loan deleted");
+  };
   const quick = (init: Partial<Transaction>) => { setTxInit(init); setTxOpen(true); };
 
   const list = tab === "BORROWED" ? db.borrowings : tab === "LENT" ? db.lendings : [];
@@ -42,26 +51,38 @@ function Loans() {
   return (
     <div>
       <PageHeader title="Loans & lending" subtitle="Principal and interest are tracked separately, as the rules require."
-        actions={<Button onClick={() => setAdding(!adding)}><Plus /> New {tab === "EMI" ? "EMI loan" : tab === "LENT" ? "lending" : "borrowing"}</Button>} />
-      <div className="mb-4 inline-flex rounded-lg border p-1">
-        {([["BORROWED", "Borrowings"], ["LENT", "Money lent"], ["EMI", "EMI loans"]] as const).map(([k, l]) => (
-          <button key={k} onClick={() => { setTab(k); setSel(""); setAdding(false); }} className={`rounded-md px-3 py-1.5 text-sm font-medium ${tab === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{l}</button>
+        actions={(tab === "CAL" || tab === "REG") ? undefined : <Button onClick={() => { setEditing(undefined); setAdding(!adding); }}><Plus /> New {tab === "EMI" ? "EMI loan" : tab === "LENT" ? "lending" : "borrowing"}</Button>} />
+      <div className="mb-4 flex max-w-full gap-1 overflow-x-auto rounded-lg border p-1 sm:inline-flex">
+        {([["BORROWED", "Borrowings"], ["LENT", "Money lent"], ["EMI", "EMI loans"], ["CAL", "Calendars"], ["REG", "Principal register"]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => { setTab(k); setSel(""); setAdding(false); setEditing(undefined); }} className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ${tab === k ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{l}</button>
         ))}
       </div>
 
-      {adding && (tab === "EMI" ? <AddEmi onDone={() => setAdding(false)} /> : <AddPrivate kind={tab} onDone={() => setAdding(false)} />)}
+      {adding && (tab === "EMI" ? <AddEmi onDone={() => setAdding(false)} /> : (tab === "BORROWED" || tab === "LENT") && <AddPrivate key={editing?.loanId ?? "new"} kind={tab} edit={editing} onDone={() => { setAdding(false); setEditing(undefined); }} />)}
 
-      {tab !== "EMI" ? (
+      {tab === "CAL" ? (
+        <div className="space-y-4"><InterestCalendarView kind="BORROWED" /><InterestCalendarView kind="LENT" /></div>
+      ) : tab === "REG" ? (
+        <PrincipalRegister />
+      ) : tab !== "EMI" ? (
         <>
+          <PortfolioStrip kind={tab} />
+          {tab === "BORROWED" && <div className="mb-4"><SettlementPlanner loans={db.borrowings} /></div>}
           <div className="mb-4 grid gap-3 md:grid-cols-2">
             {list.map((l) => {
               const s = loanSummary(l, db.transactions, today);
               return (
-                <button key={l.loanId} onClick={() => setSel(l.loanId)} className={`panel p-4 text-left ${current === l.loanId ? "glow" : ""}`}>
-                  <div className="flex justify-between"><div><div className="font-semibold">{l.counterparty}</div><div className="num text-xs text-muted-foreground">{l.loanId} · {l.monthlyInterestRate}%/month</div></div><Badge>{s.status}</Badge></div>
+                <div key={l.loanId} role="button" tabIndex={0} onClick={() => setSel(l.loanId)} className={`panel cursor-pointer p-4 text-left ${current === l.loanId ? "glow" : ""}`}>
+                  <div className="flex justify-between gap-2"><div><div className="font-semibold">{l.counterparty}</div><div className="num text-xs text-muted-foreground">{l.loanId} · {methodLabel(l)}</div></div>
+                    <div className="flex flex-wrap justify-end gap-1"><Badge>{s.status}</Badge>{l.kind === "LENT" && <RiskBadge risk={s.risk} />}</div></div>
                   <div className="num mt-3 text-xl font-bold">{inr(s.outstanding)}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">Outstanding · unpaid interest <span className="num text-warning">{inr(s.unpaidInterest)}</span></div>
-                </button>
+                  <div className="mt-1 text-xs text-muted-foreground">Outstanding · {inr(s.monthlyInterest)}/month · unpaid interest <span className="num text-warning">{inr(s.unpaidInterest)}</span>{s.daysOverdue > 0 && <> · <span className="text-destructive">{s.daysOverdue}d overdue</span></>}</div>
+                  <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                    {s.outstanding > 0 && <Button size="sm" onClick={() => setSettling(l)}>{l.kind === "BORROWED" ? "Repay / settle" : "Record recovery"}</Button>}
+                    <Button size="sm" variant="outline" aria-label="Edit loan" onClick={() => { setEditing(l); setAdding(true); }}><Pencil /></Button>
+                    <Button size="sm" variant="outline" aria-label="Delete loan" onClick={() => del(l)}><Trash2 /></Button>
+                  </div>
+                </div>
               );
             })}
             {!list.length && <p className="text-sm text-muted-foreground">No loans yet.</p>}
@@ -85,7 +106,31 @@ function Loans() {
           {db.emiLoans.filter((l) => l.loanId === current).map((l) => <EmiDetail key={l.loanId} loan={l} onQuick={quick} />)}
         </>
       )}
+      {settling && <SettleDialog loan={settling} open={!!settling} onOpenChange={(o) => !o && setSettling(undefined)} />}
       <TransactionDialog open={txOpen} onOpenChange={setTxOpen} initial={txInit} />
+    </div>
+  );
+}
+
+const methodLabel = (l: PrivateLoan) => ({
+  FIXED_MONTHLY_RATE: `${l.monthlyInterestRate}%/month`, ANNUAL_DIV_12: `${l.annualInterestRate}% p.a. ÷ 12`,
+  DAILY_ACTUAL: `${l.annualInterestRate}% p.a. daily`, MANUAL_AMOUNT: `${inr(l.manualInterestAmount ?? 0)}/month fixed`,
+}[l.calculationMethod]);
+
+function PortfolioStrip({ kind }: { kind: "BORROWED" | "LENT" }) {
+  const db = useDB();
+  const today = todayISO();
+  const B = kind === "BORROWED";
+  const ss = (B ? db.borrowings : db.lendings).map((l) => loanSummary(l, db.transactions, today));
+  const sum = (f: (s: (typeof ss)[number]) => number) => ss.reduce((a, s) => a + f(s), 0);
+  const atRisk = ss.filter((s) => s.daysOverdue > 90).length;
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+      <Stat label={B ? "Total outstanding debt" : "Total receivable"} value={inr(sum((s) => s.outstanding))} tone="brand" hint={`${ss.filter((s) => s.status !== "CLOSED").length} active`} />
+      <Stat label={B ? "Monthly interest payable" : "Monthly interest expected"} value={inr(sum((s) => s.monthlyInterest))} />
+      <Stat label={B ? "Interest paid to date" : "Interest collected (income)"} value={inr(sum((s) => s.interestSettled))} tone={B ? "bad" : "good"} />
+      <Stat label="Unpaid / overdue interest" value={inr(sum((s) => s.unpaidInterest))} tone={sum((s) => s.overdueInterest) ? "bad" : "default"} hint={`Overdue ${inr(sum((s) => s.overdueInterest))}`} />
+      <Stat label={B ? "Principal repaid" : "At-risk borrowers (>90d)"} value={B ? inr(sum((s) => s.repaid)) : String(atRisk)} tone={!B && atRisk ? "bad" : "default"} />
     </div>
   );
 }
@@ -105,7 +150,10 @@ function PrivateDetail({ loan, onQuick }: { loan: PrivateLoan; onQuick: (t: Part
         <Stat label="Outstanding principal" value={inr(s.outstanding)} tone="brand" />
         <Stat label={B ? "Interest paid" : "Interest received"} value={inr(s.interestSettled)} />
         <Stat label="Overdue interest" value={inr(s.overdueInterest)} tone={s.overdueInterest ? "bad" : "default"} />
-        <Stat label="Monthly interest now" value={inr(s.monthlyInterest)} />
+        <Stat label="Monthly interest now" value={inr(s.monthlyInterest)} hint={methodLabel(loan)} />
+        <Stat label="Interest accrued to date" value={inr(s.interestAccrued)} hint={B ? "" : "Expected — not income until received"} />
+        <Stat label="Unpaid interest" value={inr(s.unpaidInterest)} tone={s.unpaidInterest ? "warn" : "default"} />
+        <Stat label="Days overdue" value={String(s.daysOverdue)} tone={s.daysOverdue ? "bad" : "default"} hint={B ? "" : `Risk: ${s.risk}`} />
         <Stat label="Next due" value={s.nextDue ? fmtDate(s.nextDue.dueDate) : "—"} hint={s.nextDue ? inr(s.nextDue.balancePayableOrReceivable) : ""} />
       </div>
       <div className="flex flex-wrap gap-2">
@@ -145,6 +193,7 @@ function EmiDetail({ loan, onQuick }: { loan: EmiLoan; onQuick: (t: Partial<Tran
   const s = emiSchedule(loan, db.transactions);
   const base = { relatedEmiId: loan.loanId, relatedPerson: loan.lender, accountId: db.accounts[0]?.id };
   const interestPaid = s.rows.filter((r) => r.paid).reduce((a, r) => a + r.interest, 0);
+  const saved = emiInterestSaved(loan, db.transactions);
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -154,6 +203,7 @@ function EmiDetail({ loan, onQuick }: { loan: EmiLoan; onQuick: (t: Partial<Tran
         <Stat label="Remaining tenure" value={`${s.remaining} months`} hint={s.totalPrepaid ? `Prepaid ${inr(s.totalPrepaid)}` : ""} />
         <Stat label="Interest paid so far" value={inr(interestPaid)} tone="bad" />
         <Stat label="Next EMI" value={s.next ? inr(s.next.emi) : "—"} hint={s.next ? fmtDate(s.next.dueDate) : ""} />
+        <Stat label="Interest saved by prepayment" value={inr(saved.saved)} tone="good" hint={saved.monthsSaved ? `${saved.monthsSaved} months shorter` : ""} />
       </div>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={!s.next} onClick={() => s.next && onQuick({ ...base, type: "EMI Payment", amount: s.next.emi, interestComponent: s.next.interest, principalComponent: s.next.principal, date: s.next.dueDate, mainCategory: "EMI", paymentMethod: "Auto-Debit", description: `EMI ${s.next.n}` })}>Pay next EMI</Button>
@@ -174,20 +224,26 @@ function EmiDetail({ loan, onQuick }: { loan: EmiLoan; onQuick: (t: Partial<Tran
   );
 }
 
-function AddPrivate({ kind, onDone }: { kind: "BORROWED" | "LENT"; onDone: () => void }) {
+function AddPrivate({ kind, onDone, edit }: { kind: "BORROWED" | "LENT"; onDone: () => void; edit?: PrivateLoan }) {
   const db = useDB();
-  const [f, setF] = useState({ name: "", amount: "", rate: "2", method: "FIXED_MONTHLY_RATE" as CalcMethod, start: todayISO(), due: "5", account: db.accounts[0]?.id ?? "", maturity: "", collateral: "", purpose: "" });
+  const [f, setF] = useState(edit ? {
+    name: edit.counterparty, amount: String(edit.originalPrincipal), method: edit.calculationMethod, start: edit.startDate, due: String(edit.interestDueDay),
+    rate: String(edit.calculationMethod === "FIXED_MONTHLY_RATE" ? edit.monthlyInterestRate : edit.calculationMethod === "MANUAL_AMOUNT" ? edit.manualInterestAmount ?? 0 : edit.annualInterestRate),
+    account: "", maturity: edit.maturityDate ?? "", collateral: edit.collateral ?? "", purpose: edit.purpose ?? "",
+  } : { name: "", amount: "", rate: "2", method: "FIXED_MONTHLY_RATE" as CalcMethod, start: todayISO(), due: "5", account: db.accounts[0]?.id ?? "", maturity: "", collateral: "", purpose: "" });
   const save = () => {
     const amt = Number(f.amount);
-    if (!f.name || !(amt > 0) || !f.account) return toast.error("Name, amount and account are required");
-    const loanId = uid(kind === "BORROWED" ? "BRW" : "LND");
+    if (!f.name || !(amt > 0) || (!edit && !f.account)) return toast.error("Name, amount and account are required");
+    const loanId = edit?.loanId ?? uid(kind === "BORROWED" ? "BRW" : "LND");
     const rate = Number(f.rate);
     const loan: PrivateLoan = {
-      loanId, kind, counterparty: f.name, originalPrincipal: amt, startDate: f.start, monthlyInterestRate: f.method === "FIXED_MONTHLY_RATE" ? rate : rate / 12,
+      ...edit, loanId, kind, counterparty: f.name, originalPrincipal: amt, startDate: f.start, monthlyInterestRate: f.method === "FIXED_MONTHLY_RATE" ? rate : rate / 12,
       annualInterestRate: f.method === "FIXED_MONTHLY_RATE" ? rate * 12 : rate, calculationMethod: f.method, manualInterestAmount: f.method === "MANUAL_AMOUNT" ? rate : undefined,
       paymentFrequency: "Monthly", interestDueDay: Number(f.due) || 1, maturityDate: f.maturity || undefined, collateral: f.collateral, purpose: f.purpose,
     };
+    if (edit) loan.originalPrincipal = edit.originalPrincipal;
     upsert(kind === "BORROWED" ? "borrowings" : "lendings", loan, "loanId");
+    if (edit) { toast.success("Loan terms updated — ledger recalculated"); return onDone(); }
     saveTx({
       id: uid("TX"), date: f.start, type: kind === "BORROWED" ? "Money Borrowed" : "Money Lent to Another Person", amount: amt, accountId: f.account,
       relatedPerson: f.name, ...(kind === "BORROWED" ? { relatedBorrowingId: loanId } : { relatedLendingId: loanId }),
@@ -197,17 +253,17 @@ function AddPrivate({ kind, onDone }: { kind: "BORROWED" | "LENT"; onDone: () =>
     onDone();
   };
   return (
-    <Panel title={kind === "BORROWED" ? "New borrowing" : "New money lent"} className="mb-4">
+    <Panel title={edit ? `Edit ${edit.loanId}` : kind === "BORROWED" ? "New borrowing" : "New money lent"} className="mb-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label={kind === "BORROWED" ? "Lender name" : "Borrower name"}><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-        <Field label="Principal (₹)"><Input type="number" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></Field>
+        <Field label={edit ? "Principal (₹) — change via repay/top-up" : "Principal (₹)"}><Input type="number" disabled={!!edit} value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></Field>
         <Field label="Method"><Select value={f.method} onChange={(e) => setF({ ...f, method: e.target.value as CalcMethod })}>
           <option value="FIXED_MONTHLY_RATE">Fixed % per month</option><option value="ANNUAL_DIV_12">Annual % ÷ 12</option><option value="DAILY_ACTUAL">Daily actual (annual %)</option><option value="MANUAL_AMOUNT">Manual ₹ per month</option>
         </Select></Field>
         <Field label={f.method === "FIXED_MONTHLY_RATE" ? "Rate % per month" : f.method === "MANUAL_AMOUNT" ? "₹ per month" : "Rate % per year"}><Input type="number" value={f.rate} onChange={(e) => setF({ ...f, rate: e.target.value })} /></Field>
         <Field label="Start date"><Input type="date" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></Field>
         <Field label="Interest due day (1–31)"><Input type="number" min={1} max={31} value={f.due} onChange={(e) => setF({ ...f, due: e.target.value })} /></Field>
-        <Field label={kind === "BORROWED" ? "Received into" : "Paid from"}><Select value={f.account} onChange={(e) => setF({ ...f, account: e.target.value })}>{db.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></Field>
+        {!edit && <Field label={kind === "BORROWED" ? "Received into" : "Paid from"}><Select value={f.account} onChange={(e) => setF({ ...f, account: e.target.value })}>{db.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></Field>}
         <Field label="Maturity / repayment date"><Input type="date" value={f.maturity} onChange={(e) => setF({ ...f, maturity: e.target.value })} /></Field>
         <Field label="Collateral"><Input value={f.collateral} onChange={(e) => setF({ ...f, collateral: e.target.value })} /></Field>
       </div>

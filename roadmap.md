@@ -3,3 +3,9 @@
 - [x] Mobile layout, theme control and global Quick Entry.
 - [x] AI description suggestions without changing transaction models or accounting.
 - [x] Verify accounting tests and real dashboard/entry flows.
+
+# Bank sync and financial planning
+- [ ] Review-first CSV/Excel/SMS bank inbox, duplicate protection, loan suggestions and merchant rules.
+- [ ] Expenses/budgets, assets/net worth, cash flow, commitments, annual statements, goals and configuration.
+- [ ] Nine-scenario accounting audit and full 15-sheet Excel/JSON export and restore.
+- [ ] Verify approval, backups and planning flows with accounting regression tests.

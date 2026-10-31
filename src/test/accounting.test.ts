@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildSeed } from "@/lib/seed";
-import { accountStatement, emiSchedule, loanSummary, summarize } from "@/lib/accountingEngine";
+import { accountStatement, emiSchedule, loanSummary, riskOf, summarize } from "@/lib/accountingEngine";
+import type { PrivateLoan } from "@/lib/types";
 import type { Transaction } from "@/lib/types";
 
 const db = buildSeed();
@@ -35,5 +36,24 @@ describe("accounting rules", () => {
     const acc = { id: "A", name: "A", type: "Savings" as const, openingBalance: 1000 };
     const t = { id: "1", date: "2026-05-01", direction: "TRANSFER", amount: 400, accountId: "A", toAccountId: "B" } as Transaction;
     expect(accountStatement(acc, [t]).closing).toBe(600);
+  });
+
+  const loan: PrivateLoan = { loanId: "L1", kind: "BORROWED", counterparty: "X", originalPrincipal: 500000, startDate: "2026-01-01", annualInterestRate: 24, monthlyInterestRate: 2, calculationMethod: "FIXED_MONTHLY_RATE", paymentFrequency: "Monthly", interestDueDay: 5 };
+  const tx = (id: string, type: string, amount: number, date: string) => ({ id, type, amount, date, accountId: "A", relatedBorrowingId: "L1" } as Transaction);
+  const base = [tx("b", "Money Borrowed", 500000, "2026-01-01"), tx("i", "Interest Paid on Borrowing", 10000, "2026-02-05")];
+  it("partial ₹1,00,000 repayment drops outstanding to ₹4,00,000 and interest to ₹8,000, keeps interest paid", () => {
+    const s = loanSummary(loan, [...base, tx("r", "Principal Repayment on Borrowing", 100000, "2026-02-01")], "2026-03-10");
+    expect(s.outstanding).toBe(400000);
+    expect(s.monthlyInterest).toBe(8000);
+    expect(s.interestSettled).toBe(10000);
+  });
+  it("full settlement closes the loan and stops interest", () => {
+    const s = loanSummary(loan, [...base, tx("r", "Principal Repayment on Borrowing", 500000, "2026-02-01")], "2026-12-10");
+    expect(s.status).toBe("CLOSED");
+    expect(s.monthlyInterest).toBe(0);
+    expect(s.ledger.length).toBe(1);
+  });
+  it("borrower risk buckets at 30/90/180 days", () => {
+    expect([riskOf(0), riskOf(30), riskOf(90), riskOf(180), riskOf(181)]).toEqual(["Low", "Watch", "Moderate", "High", "Severe"]);
   });
 });

@@ -72,7 +72,7 @@ function Loans() {
             {list.map((l) => {
               const s = loanSummary(l, db.transactions, today);
               return (
-                <div key={l.loanId} role="button" tabIndex={0} onClick={() => setSel(l.loanId)} className={`panel cursor-pointer p-4 text-left ${current === l.loanId ? "glow" : ""}`}>
+                <div key={l.loanId} onClick={() => setSel(l.loanId)} className={`panel cursor-pointer p-4 text-left ${current === l.loanId ? "glow" : ""}`}>
                   <div className="flex justify-between gap-2"><div><div className="font-semibold">{l.counterparty}</div><div className="num text-xs text-muted-foreground">{l.loanId} · {methodLabel(l)}</div></div>
                     <div className="flex flex-wrap justify-end gap-1"><Badge>{s.status}</Badge>{l.kind === "LENT" && <RiskBadge risk={s.risk} />}</div></div>
                   <div className="num mt-3 text-xl font-bold">{inr(s.outstanding)}</div>

@@ -118,8 +118,8 @@ export interface EmiLoan {
 }
 
 export interface Budget { id: string; category: string; monthlyLimit: number }
-export interface Asset { id: string; name: string; type: string; currentValue: number }
-export interface Obligation { id: string; name: string; amount: number; dueDay: number }
+export interface Asset { id: string; name: string; type: string; currentValue: number; bookValue?: number; acquiredDate?: string }
+export interface Obligation { id: string; name: string; amount: number; dueDay: number; category?: string; accountId?: string }
 export interface Goal { id: string; name: string; target: number; saved: number; targetDate?: string }
 export interface MasterConfig {
   expenseCategories: Record<string, string[]>;
@@ -139,4 +139,20 @@ export interface DB {
   obligations: Obligation[];
   goals: Goal[];
   config: MasterConfig;
+  bankSync?: { rows: StagedBankRow[]; rules: MerchantRule[] };
+}
+
+export interface MerchantRule {
+  id: string; merchant: string; type: TxType; mainCategory: string; subCategory: string;
+  essentialOrDiscretionary?: Transaction["essentialOrDiscretionary"];
+  needOrWant?: Transaction["needOrWant"];
+  personalOrBusiness?: Transaction["personalOrBusiness"];
+  fixedOrVariable?: Transaction["fixedOrVariable"];
+}
+export interface StagedBankRow {
+  id: string; fingerprint: string; date: string; amount: number; direction: "IN" | "OUT";
+  accountId: string; description: string; referenceNumber?: string; balance?: number;
+  merchant: string; upiId?: string; paymentMethod: string; sourceFile: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  confidence: "High" | "Review"; reason: string; draft: Partial<Transaction>;
 }

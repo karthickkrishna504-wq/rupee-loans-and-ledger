@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountsRouteImport } from './routes/accounts'
+import { Route as BankSyncRouteImport } from './routes/bank-sync'
 import { Route as LoansRouteImport } from './routes/loans'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TransactionsRouteImport } from './routes/transactions'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const AccountsRoute = AccountsRouteImport.update({
   id: '/accounts',
   path: '/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BankSyncRoute = BankSyncRouteImport.update({
+  id: '/bank-sync',
+  path: '/bank-sync',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoansRoute = LoansRouteImport.update({
@@ -44,6 +50,7 @@ const TransactionsRoute = TransactionsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
+  '/bank-sync': typeof BankSyncRoute
   '/loans': typeof LoansRoute
   '/settings': typeof SettingsRoute
   '/transactions': typeof TransactionsRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
+  '/bank-sync': typeof BankSyncRoute
   '/loans': typeof LoansRoute
   '/settings': typeof SettingsRoute
   '/transactions': typeof TransactionsRoute
@@ -59,21 +67,32 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
+  '/bank-sync': typeof BankSyncRoute
   '/loans': typeof LoansRoute
   '/settings': typeof SettingsRoute
   '/transactions': typeof TransactionsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/accounts' | '/loans' | '/settings' | '/transactions'
+  fullPaths:
+    '/' | '/accounts' | '/bank-sync' | '/loans' | '/settings' | '/transactions'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/accounts' | '/loans' | '/settings' | '/transactions'
-  id: '__root__' | '/' | '/accounts' | '/loans' | '/settings' | '/transactions'
+  to:
+    '/' | '/accounts' | '/bank-sync' | '/loans' | '/settings' | '/transactions'
+  id:
+    | '__root__'
+    | '/'
+    | '/accounts'
+    | '/bank-sync'
+    | '/loans'
+    | '/settings'
+    | '/transactions'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountsRoute: typeof AccountsRoute
+  BankSyncRoute: typeof BankSyncRoute
   LoansRoute: typeof LoansRoute
   SettingsRoute: typeof SettingsRoute
   TransactionsRoute: typeof TransactionsRoute
@@ -93,6 +112,13 @@ declare module '@tanstack/react-router' {
       path: '/accounts'
       fullPath: '/accounts'
       preLoaderRoute: typeof AccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bank-sync': {
+      id: '/bank-sync'
+      path: '/bank-sync'
+      fullPath: '/bank-sync'
+      preLoaderRoute: typeof BankSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/loans': {
@@ -122,6 +148,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountsRoute: AccountsRoute,
+  BankSyncRoute: BankSyncRoute,
   LoansRoute: LoansRoute,
   SettingsRoute: SettingsRoute,
   TransactionsRoute: TransactionsRoute,

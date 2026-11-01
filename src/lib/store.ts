@@ -9,6 +9,7 @@ const SEEDED = "finledger-erp-seeded";
 export const emptyDB = (): DB => ({
   accounts: [], transactions: [], borrowings: [], lendings: [], emiLoans: [],
   budgets: [], assets: [], obligations: [], goals: [], config: defaultConfig(),
+  bankSync: { rows: [], rules: [] },
 });
 
 const SERVER: DB = emptyDB();
@@ -23,7 +24,7 @@ function load(): DB {
     else if (!localStorage.getItem(SEEDED)) { state = buildSeed(); localStorage.setItem(SEEDED, "1"); persist(); }
     else state = emptyDB();
   } catch { state = emptyDB(); }
-  return state!;
+  return state ?? emptyDB();
 }
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* quota */ } }
 

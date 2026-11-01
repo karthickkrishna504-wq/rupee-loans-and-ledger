@@ -352,3 +352,39 @@ export function filterByPeriod(txs: Transaction[], period: string) {
   if (period.startsWith("FY:")) { const y = Number(period.slice(3)); return txs.filter((t) => fyStart(t.date) === y); }
   return txs;
 }
+
+/* Derived statements: existing classifications and portfolio formulas remain authoritative. */
+export function monthlyStatement(db: DB, month: string) {
+  const from = `${month}-01`, end = addDays(addMonths(from, 1), -1);
+  const txs = filterByPeriod(db.transactions, `M:${month}`);
+  const s = summarize(txs);
+  const historical = { ...db, transactions: db.transactions.filter(t => t.date <= end), borrowings: db.borrowings.filter(l=>l.startDate<=end), lendings: db.lendings.filter(l=>l.startDate<=end), emiLoans: db.emiLoans.filter(l=>l.disbursementDate<=end), assets: db.assets.filter(a=>!a.acquiredDate || a.acquiredDate<=end) };
+  const p = portfolio(historical, end);
+  const sum = (type: Transaction["type"]) => txs.filter(t=>t.type===type).reduce((n,t)=>n+t.amount,0);
+  const borrowed=sum("Money Borrowed"), repaid=sum("Principal Repayment on Borrowing")+s.emiPrincipal;
+  const lent=sum("Money Lent to Another Person"), recovered=sum("Principal Received from Borrower");
+  const purchases=sum("Asset Purchase")+sum("Investment Purchase"), sales=sum("Asset Sale")+sum("Investment Sale");
+  const financing=borrowed-repaid-lent+recovered-purchases+sales;
+  const opening=totalCash(db,addDays(from,-1)),closing=totalCash(db,end);
+  return {month,...s,ordinaryExpenses:s.expense-s.interestPaid-s.emiInterest,operating:s.income-s.expense,borrowed,repaid,lent,recovered,purchases,sales,transfers:sum("Transfer Between Own Accounts"),financing,opening,closing,netCash:s.income-s.expense+financing,netWorth:p.netWorth,cash:p.cash,assets:p.totalAssets,liabilities:p.totalLiabilities,lentOutstanding:p.lentOut,borrowingOutstanding:p.borrowOut,emiOutstanding:p.emiOut,unpaidInterestPayable:p.borrowings.reduce((n,x)=>n+x.s.unpaidInterest,0),unpaidInterestReceivable:p.lendings.reduce((n,x)=>n+x.s.unpaidInterest,0)};
+}
+export const ANNUAL_METRICS = ["income","expense","savings","interestPaid","interestReceived","emiPaid","emiInterest","emiPrincipal","borrowed","repaid","lent","recovered","purchases","sales","operating","financing","netCash","closing","netWorth","liabilities"] as const;
+export function annualStatements(db:DB,year:number){return Array.from({length:12},(_,i)=>monthlyStatement(db,addMonths(`${year}-04-01`,i).slice(0,7)));}
+export function budgetStatement(db:DB,month:string) {
+  const current=summarize(filterByPeriod(db.transactions,`M:${month}`));
+  const previous=summarize(filterByPeriod(db.transactions,`M:${addMonths(`${month}-01`,-1).slice(0,7)}`));
+  return db.budgets.map(b=>({...b,actual:current.byCategory[b.category]??0,previous:previous.byCategory[b.category]??0,variance:b.monthlyLimit-(current.byCategory[b.category]??0)}));
+}
+export function assetValues(db:DB) {
+  return db.assets.map(a=>{const linked=db.transactions.filter(t=>t.relatedAssetId===a.id);const book=linked.reduce((n,t)=>n+((t.type==="Asset Purchase" || t.type==="Investment Purchase")?t.amount:(t.type==="Asset Sale" || t.type==="Investment Sale")?-t.amount:0),0);return {...a,book:linked.length?book:a.bookValue??a.currentValue,linked:linked.length>0};});
+}
+export function commitmentStatement(db:DB,today:string,days:number) {
+  const end=addDays(today,days);
+  const rows:{id:string;name:string;kind:string;date:string;amount:number;overdue:boolean}[]=[];
+  for(const l of db.borrowings){for(const r of interestLedger(l,db.transactions,today,end)){if(r.dueDate<=end && r.balancePayableOrReceivable>0.005)rows.push({id:`${l.loanId}-${r.period}`,name:l.counterparty,kind:"Borrowing interest",date:r.dueDate,amount:r.balancePayableOrReceivable,overdue:r.dueDate<today});}}
+  for(const l of db.emiLoans){for(const r of emiSchedule(l,db.transactions).rows){if(!r.paid && r.dueDate<=end)rows.push({id:`${l.loanId}-${r.n}`,name:l.lender,kind:"EMI",date:r.dueDate,amount:r.emi,overdue:r.dueDate<today});}}
+  for(const o of db.obligations){for(let i=0;i<=Math.ceil(days/28);i++){const first=today.slice(0,8)+"01",month=addMonths(first,i);const {y,m}=parts(month);const date=toISO(y,m,Math.min(o.dueDay,daysInMonth(y,m)));if(date<today || date>end)continue;
+    const paid=db.transactions.filter(t=>monthKey(t.date)===monthKey(date) && expenseOf(t)>0 && (o.accountId?o.accountId===t.accountId:true) && t.description.trim().toLowerCase()===o.name.trim().toLowerCase()).reduce((n,t)=>n+expenseOf(t),0);
+    const amount=Math.max(0,o.amount-paid);if(amount>0)rows.push({id:`${o.id}-${date}`,name:o.name,kind:o.category??"Recurring obligation",date,amount,overdue:false});}}
+  return rows.sort((a,b)=>a.date.localeCompare(b.date));
+}

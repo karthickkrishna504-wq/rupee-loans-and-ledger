@@ -60,7 +60,7 @@ export function suggestBankRow(row: StagedBankRow, db: DB): StagedBankRow {
     const emis=db.emiLoans.map(loan=>({loan,next:emiSchedule(loan,db.transactions.filter(t=>t.date<=row.date)).next})).filter(x=>x.next && Math.abs(x.next.emi-row.amount)<0.01);
     if(emis.length===1){const e=emis[0];draft.type="EMI Payment";draft.relatedEmiId=e.loan.loanId;draft.interestComponent=e.next?.interest;draft.principalComponent=e.next?.principal;draft.mainCategory="EMI";reason=`Scheduled EMI matches ${e.loan.lender}`;confidence=sameName(text,e.loan.lender)?"High":"Review";}
   }
-  if(!match && !draft.type && rules.length===1 && txMeta(rules[0].type).dir===direction){ Object.assign(draft,rules[0]);delete (draft as Record<string,unknown>).merchant;delete draft.id;reason=`Remembered merchant rule: ${rules[0].merchant}`;confidence="High"; }
+  if(!match && !draft.type && rules.length===1 && txMeta(rules[0].type).dir===direction){ Object.assign(draft,rules[0]);delete (draft as Record<string,unknown>)["merchant"];delete draft.id;reason=`Remembered merchant rule: ${rules[0].merchant}`;confidence="High"; }
   return {...row,draft,reason,confidence};
 }
 function makeRow(date:string,amount:number,direction:"IN"|"OUT",description:string,accountId:string,sourceFile:string,extra:Partial<StagedBankRow>={}):StagedBankRow {

@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, ListOrdered, Landmark, HandCoins, Settings, Moon, Sun, Plus } from "lucide-react";
+import { LayoutDashboard, ListOrdered, Landmark, HandCoins, Settings, Moon, Sun, Plus, Inbox, Target, FileChartColumn } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { TransactionDialog } from "./TransactionDialog";
@@ -10,6 +10,9 @@ const NAV = [
   { to: "/transactions", label: "Register", icon: ListOrdered },
   { to: "/accounts", label: "Accounts", icon: Landmark },
   { to: "/loans", label: "Loans", icon: HandCoins },
+  { to: "/bank-sync", label: "Bank Sync", icon: Inbox },
+  { to: "/planning", label: "Planning", icon: Target },
+  { to: "/statements", label: "Statements", icon: FileChartColumn },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -61,9 +64,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <Button onClick={() => setEntryOpen(true)} className="quick-entry-fab fixed right-4 z-30 rounded-full px-5 md:right-8"><Plus /> Quick Entry</Button>
       <TransactionDialog open={entryOpen} onOpenChange={setEntryOpen} />
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         {NAV.map(({ to, label, icon: Icon }) => (
-          <Link key={to} to={to} className={cn("flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground", path === to && "text-primary")}>
+          <Link key={to} to={to} className={cn("flex min-w-[72px] flex-1 flex-col items-center gap-1 py-2.5 text-[10px] font-medium text-muted-foreground", path === to && "text-primary")}>
             <Icon className="size-5" /> {label}
           </Link>
         ))}

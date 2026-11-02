@@ -13,7 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as BankSyncRouteImport } from './routes/bank-sync'
 import { Route as LoansRouteImport } from './routes/loans'
+import { Route as PlanningRouteImport } from './routes/planning'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as StatementsRouteImport } from './routes/statements'
 import { Route as TransactionsRouteImport } from './routes/transactions'
 
 const IndexRoute = IndexRouteImport.update({
@@ -36,9 +38,19 @@ const LoansRoute = LoansRouteImport.update({
   path: '/loans',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlanningRoute = PlanningRouteImport.update({
+  id: '/planning',
+  path: '/planning',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatementsRoute = StatementsRouteImport.update({
+  id: '/statements',
+  path: '/statements',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TransactionsRoute = TransactionsRouteImport.update({
@@ -52,7 +64,9 @@ export interface FileRoutesByFullPath {
   '/accounts': typeof AccountsRoute
   '/bank-sync': typeof BankSyncRoute
   '/loans': typeof LoansRoute
+  '/planning': typeof PlanningRoute
   '/settings': typeof SettingsRoute
+  '/statements': typeof StatementsRoute
   '/transactions': typeof TransactionsRoute
 }
 export interface FileRoutesByTo {
@@ -60,7 +74,9 @@ export interface FileRoutesByTo {
   '/accounts': typeof AccountsRoute
   '/bank-sync': typeof BankSyncRoute
   '/loans': typeof LoansRoute
+  '/planning': typeof PlanningRoute
   '/settings': typeof SettingsRoute
+  '/statements': typeof StatementsRoute
   '/transactions': typeof TransactionsRoute
 }
 export interface FileRoutesById {
@@ -69,23 +85,41 @@ export interface FileRoutesById {
   '/accounts': typeof AccountsRoute
   '/bank-sync': typeof BankSyncRoute
   '/loans': typeof LoansRoute
+  '/planning': typeof PlanningRoute
   '/settings': typeof SettingsRoute
+  '/statements': typeof StatementsRoute
   '/transactions': typeof TransactionsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/accounts' | '/bank-sync' | '/loans' | '/settings' | '/transactions'
+    | '/'
+    | '/accounts'
+    | '/bank-sync'
+    | '/loans'
+    | '/planning'
+    | '/settings'
+    | '/statements'
+    | '/transactions'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/accounts' | '/bank-sync' | '/loans' | '/settings' | '/transactions'
+    | '/'
+    | '/accounts'
+    | '/bank-sync'
+    | '/loans'
+    | '/planning'
+    | '/settings'
+    | '/statements'
+    | '/transactions'
   id:
     | '__root__'
     | '/'
     | '/accounts'
     | '/bank-sync'
     | '/loans'
+    | '/planning'
     | '/settings'
+    | '/statements'
     | '/transactions'
   fileRoutesById: FileRoutesById
 }
@@ -94,7 +128,9 @@ export interface RootRouteChildren {
   AccountsRoute: typeof AccountsRoute
   BankSyncRoute: typeof BankSyncRoute
   LoansRoute: typeof LoansRoute
+  PlanningRoute: typeof PlanningRoute
   SettingsRoute: typeof SettingsRoute
+  StatementsRoute: typeof StatementsRoute
   TransactionsRoute: typeof TransactionsRoute
 }
 
@@ -128,11 +164,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoansRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/planning': {
+      id: '/planning'
+      path: '/planning'
+      fullPath: '/planning'
+      preLoaderRoute: typeof PlanningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/statements': {
+      id: '/statements'
+      path: '/statements'
+      fullPath: '/statements'
+      preLoaderRoute: typeof StatementsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/transactions': {
@@ -150,7 +200,9 @@ const rootRouteChildren: RootRouteChildren = {
   AccountsRoute: AccountsRoute,
   BankSyncRoute: BankSyncRoute,
   LoansRoute: LoansRoute,
+  PlanningRoute: PlanningRoute,
   SettingsRoute: SettingsRoute,
+  StatementsRoute: StatementsRoute,
   TransactionsRoute: TransactionsRoute,
 }
 export const routeTree = rootRouteImport

@@ -45,7 +45,7 @@ export function useDB(): DB {
 
 export const uid = (p: string) => `${p}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 
-type ListKey = Exclude<keyof DB, "config">;
+type ListKey = Exclude<keyof DB, "config" | "bankSync">;
 export function upsert<K extends ListKey>(key: K, item: DB[K][number], idField: string = "id") {
   setDB((d) => {
     const list = d[key] as unknown as Record<string, unknown>[];

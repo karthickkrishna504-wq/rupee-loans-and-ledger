@@ -16,3 +16,6 @@
 - Dashboard tabs only partition presentation; calculations and portfolio metrics stay derived from the existing engine.
 - Global Quick Entry reuses TransactionDialog and saveTx so every entry retains the same validations and ledger normalization.
 - AI classification is advisory through a server function, constrained to existing transaction types/categories and classification fields; it never saves entries or changes money values.
+- Bank staging and merchant rules live in the same local DB backup; bulk approval validates links, directions, splits, principal limits and fingerprints before updating transactions and inbox together.
+- Financial statements extend the central engine with pure derived helpers; historical transaction cutoffs are applied before portfolio calculations and market estimates are not treated as historical snapshots.
+- Portable workbooks use named source sheets and JSON-encoded nested fields; derived ledger sheets are read-only exports and imports validate all source data before explicit replacement.

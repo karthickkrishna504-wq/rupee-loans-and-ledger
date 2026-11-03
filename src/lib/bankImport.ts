@@ -102,7 +102,7 @@ export function parseBankSms(text:string,accountId:string,fallbackDate:string){
   });return {rows,errors};
 }
 export function stageBankRows(db:DB, incoming:StagedBankRow[]) {
-  const known=new Set([...(db.bankSync?.rows??[]).map(r=>r.fingerprint),...db.transactions.map(t=>bankFingerprint(t))]);
+  const known=new Set([...(db.bankSync?.rows??[]).map(r=>r.fingerprint),...db.transactions.flatMap(t=>t.direction==="TRANSFER"?[bankFingerprint({...t,direction:"OUT"}),...(t.toAccountId?[bankFingerprint({...t,direction:"IN",accountId:t.toAccountId})]:[])]:[bankFingerprint(t)])]);
   const rows:StagedBankRow[]=[];let duplicates=0;
   for(const r of incoming){if(known.has(r.fingerprint)){duplicates++;continue;} known.add(r.fingerprint);rows.push(suggestBankRow(r,db));}
   return {db:{...db,bankSync:{rows:[...(db.bankSync?.rows??[]),...rows],rules:db.bankSync?.rules??[]}},added:rows.length,duplicates};
@@ -135,9 +135,9 @@ export function stagedTransaction(row:StagedBankRow,db:DB):Transaction {
 export function approveBankRows(db:DB,ids:string[]) {
   let next=db;const errors:string[]=[];let approved=0;
   const rows=(db.bankSync?.rows??[]).map(r=>({...r}));
-  const known=new Set(db.transactions.map(t=>bankFingerprint(t)));
+  const known=new Set(db.transactions.flatMap(t=>t.direction==="TRANSFER"?[bankFingerprint({...t,direction:"OUT"}),...(t.toAccountId?[bankFingerprint({...t,direction:"IN",accountId:t.toAccountId})]:[])]:[bankFingerprint(t)]));
   for(const row of rows.filter(r=>ids.includes(r.id) && r.status==="PENDING").sort((a,b)=>a.date.localeCompare(b.date))){
-    try{if(known.has(row.fingerprint))throw new Error("Already in register");const tx=stagedTransaction(row,next);next={...next,transactions:[...next.transactions,tx]};known.add(row.fingerprint);row.status="APPROVED";approved++;}
+    try{if(known.has(row.fingerprint))throw new Error("Already in register");const tx=stagedTransaction(row,next);next={...next,transactions:[...next.transactions,tx]};known.add(row.fingerprint);if(tx.direction==="TRANSFER" && tx.toAccountId)known.add(bankFingerprint({...tx,direction:"IN",accountId:tx.toAccountId}));row.status="APPROVED";approved++;}
     catch(e){errors.push(`${row.merchant}: ${e instanceof Error?e.message:"Invalid row"}`);}
   }
   return {db:{...next,bankSync:{rows,rules:db.bankSync?.rules??[]}},approved,errors};

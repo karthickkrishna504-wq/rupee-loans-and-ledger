@@ -3,6 +3,8 @@ import { z } from "zod";
 import { annualStatements, interestLedger, principalMovements, emiSchedule } from "./accountingEngine";
 import { TX_TYPES, type DB } from "./types";
 import { fyStart, todayISO, fmtDate } from "./format";
+import { parseBankDate } from "./bankImport";
+import { txMeta } from "./types";
 
 const account=z.object({id:z.string(),name:z.string(),type:z.enum(["Savings","Current","Cash in Hand","Digital Wallet"]),openingBalance:z.number().finite()}).passthrough();
 const transaction=z.object({id:z.string(),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),type:z.string().refine(t=>TX_TYPES.some(x=>x.type===t)),amount:z.number().finite().positive(),accountId:z.string(),direction:z.enum(["IN","OUT","TRANSFER"]),description:z.string(),mainCategory:z.string(),subCategory:z.string(),paymentMethod:z.string(),source:z.enum(["Manual","Bank Import","Auto-Rule"]),month:z.number(),year:z.number(),financialYear:z.string()}).passthrough();
@@ -10,6 +12,16 @@ const privateLoan=z.object({loanId:z.string(),kind:z.enum(["BORROWED","LENT"]),c
 const schema=z.object({accounts:z.array(account),transactions:z.array(transaction),borrowings:z.array(privateLoan),lendings:z.array(privateLoan),emiLoans:z.array(z.object({loanId:z.string(),lender:z.string(),loanType:z.enum(["Home","Personal","Vehicle","Business","Education","Consumer"]),originalAmount:z.number().positive(),annualRate:z.number().nonnegative(),tenureMonths:z.number().int().positive(),disbursementDate:z.string(),emiStartDate:z.string(),emiDay:z.number().int().min(1).max(31),processingFee:z.number().nonnegative()}).passthrough()),budgets:z.array(z.object({id:z.string(),category:z.string(),monthlyLimit:z.number().nonnegative()}).passthrough()),assets:z.array(z.object({id:z.string(),name:z.string(),type:z.string(),currentValue:z.number().finite()}).passthrough()),obligations:z.array(z.object({id:z.string(),name:z.string(),amount:z.number().nonnegative(),dueDay:z.number().int().min(1).max(31)}).passthrough()),goals:z.array(z.object({id:z.string(),name:z.string(),target:z.number().positive(),saved:z.number().nonnegative()}).passthrough()),config:z.object({expenseCategories:z.record(z.array(z.string())),incomeCategories:z.array(z.string()),paymentMethods:z.array(z.string()),people:z.array(z.string())}),bankSync:z.object({rows:z.array(z.object({id:z.string(),fingerprint:z.string(),date:z.string(),amount:z.number().positive(),direction:z.enum(["IN","OUT"]),accountId:z.string(),description:z.string(),merchant:z.string(),paymentMethod:z.string(),sourceFile:z.string(),status:z.enum(["PENDING","APPROVED","REJECTED"]),confidence:z.enum(["High","Review"]),reason:z.string(),draft:z.object({}).passthrough()}).passthrough()),rules:z.array(z.object({id:z.string(),merchant:z.string().min(1),type:z.string().refine(t=>TX_TYPES.some(x=>x.type===t)),mainCategory:z.string(),subCategory:z.string()}).passthrough())}).optional()});
 export function validateBackup(value:unknown):DB {
   const db=schema.parse(value) as DB;
+  for(const t of db.transactions){
+    if(parseBankDate(t.date)!==t.date)throw new Error(`Invalid date for ${t.id}`);
+    const meta=txMeta(t.type);
+    if(t.direction!==meta.dir)throw new Error(`Invalid direction for ${t.id}`);
+    if(meta.dir==="TRANSFER" && (!t.toAccountId || t.toAccountId===t.accountId))throw new Error(`Invalid transfer for ${t.id}`);
+    if(meta.link==="lending" && !t.relatedLendingId)throw new Error(`Missing lending link for ${t.id}`);
+    if(meta.link==="borrowing" && !t.relatedBorrowingId)throw new Error(`Missing borrowing link for ${t.id}`);
+    if(meta.link==="borrowing_or_emi" && !t.relatedBorrowingId && !t.relatedEmiId)throw new Error(`Missing loan link for ${t.id}`);
+    if(meta.link==="emi" && (!t.relatedEmiId || t.interestComponent===undefined || t.principalComponent===undefined || t.interestComponent<0 || t.principalComponent<0 || Math.abs(t.interestComponent+t.principalComponent-t.amount)>1))throw new Error(`Invalid EMI split for ${t.id}`);
+  }
   for(const key of ["accounts","transactions","budgets","assets","obligations","goals"] as const){const ids=db[key].map(x=>x.id);if(new Set(ids).size!==ids.length)throw new Error(`Duplicate IDs in ${key}`);}
   for(const t of db.transactions){if(!db.accounts.some(a=>a.id===t.accountId))throw new Error(`Missing account for ${t.id}`);if(t.toAccountId && !db.accounts.some(a=>a.id===t.toAccountId))throw new Error(`Missing transfer account for ${t.id}`);if(t.relatedBorrowingId && !db.borrowings.some(l=>l.loanId===t.relatedBorrowingId))throw new Error(`Missing borrowing for ${t.id}`);if(t.relatedLendingId && !db.lendings.some(l=>l.loanId===t.relatedLendingId))throw new Error(`Missing lending for ${t.id}`);if(t.relatedEmiId && !db.emiLoans.some(l=>l.loanId===t.relatedEmiId))throw new Error(`Missing EMI loan for ${t.id}`);}
   return db;
@@ -26,6 +38,14 @@ export function buildWorkbook(db:DB,today=todayISO()) {
   append("Budgets",db.budgets);append("Assets",db.assets);append("Obligations",db.obligations);append("Goals",db.goals);
   append("Configuration",Object.entries(db.config).map(([key,value])=>({key,value:JSON.stringify(value)})));
   append("Monthly Summary",annualStatements(db,fyStart(today)));
+  const summary=wb.Sheets["Monthly Summary"];
+  const header=XLSX.utils.sheet_to_json<string[]>(summary,{header:1})[0]??[];
+  const ref=(key:string,row:number)=>`${XLSX.utils.encode_col(header.indexOf(key))}${row}`;
+  for(let row=2;row<=13;row++){
+    for(const [key,formula] of Object.entries({savings:`${ref("income",row)}-${ref("expense",row)}`,operating:`${ref("income",row)}-${ref("expense",row)}`,financing:`${ref("borrowed",row)}-${ref("repaid",row)}-${ref("lent",row)}+${ref("recovered",row)}-${ref("purchases",row)}+${ref("sales",row)}`,netCash:`${ref("operating",row)}+${ref("financing",row)}`,netWorth:`${ref("assets",row)}-${ref("liabilities",row)}`})){
+      const cell=summary[ref(key,row)];if(cell){cell.f=formula;cell.z='#,##0.00;(#,##0.00);"-"';}
+    }
+  }
   append("Bank Inbox",[...(db.bankSync?.rows??[]).map(r=>({recordType:"row",payload:JSON.stringify(r)})),...(db.bankSync?.rules??[]).map(r=>({recordType:"rule",payload:JSON.stringify(r)})),{recordType:"metadata",payload:JSON.stringify({version:2,exportedAt:today,dateFormat:"ISO YYYY-MM-DD",currency:"INR"})}]);
   return wb;
 }

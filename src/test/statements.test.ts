@@ -12,4 +12,5 @@ describe("financial statements and backups",()=>{
  it("executes exactly nine passing audit scenarios",()=>{const audit=runAccountingAudit();expect(audit).toHaveLength(9);expect(audit.filter(x=>!x.pass)).toEqual([]);});
  it("round-trips a full 15-sheet workbook with nested configuration and overrides",()=>{const db=buildSeed();db.emiLoans[0].overrides={1:{interest:5500,principal:14143}};const wb=buildWorkbook(db,"2026-10-31");expect(wb.SheetNames).toHaveLength(15);const bytes=XLSX.write(wb,{type:"buffer",bookType:"xlsx"});const restored=readWorkbook(XLSX.read(bytes,{type:"buffer"}));expect(restored.transactions).toEqual(db.transactions);expect(restored.config).toEqual(db.config);expect(restored.emiLoans).toEqual(db.emiLoans);});
  it("rejects malformed backup before replacement",()=>{expect(()=>validateBackup({accounts:[]})).toThrow();});
+ it("rejects a borrowing incorrectly marked as an outflow",()=>{const db=buildSeed();db.transactions[0].direction="OUT";expect(()=>validateBackup(db)).toThrow("Invalid direction");});
 });

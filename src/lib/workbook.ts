@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import XLSX from "xlsx";
 import { z } from "zod";
 import { annualStatements, interestLedger, principalMovements, emiSchedule } from "./accountingEngine";
 import { TX_TYPES, type DB } from "./types";
@@ -26,6 +26,14 @@ export function buildWorkbook(db:DB,today=todayISO()) {
   append("Budgets",db.budgets);append("Assets",db.assets);append("Obligations",db.obligations);append("Goals",db.goals);
   append("Configuration",Object.entries(db.config).map(([key,value])=>({key,value:JSON.stringify(value)})));
   append("Monthly Summary",annualStatements(db,fyStart(today)));
+  const summary=wb.Sheets["Monthly Summary"];
+  const header=XLSX.utils.sheet_to_json<string[]>(summary,{header:1})[0]??[];
+  const ref=(key:string,row:number)=>`${XLSX.utils.encode_col(header.indexOf(key))}${row}`;
+  for(let row=2;row<=13;row++){
+    for(const [key,formula] of Object.entries({savings:`${ref("income",row)}-${ref("expense",row)}`,operating:`${ref("income",row)}-${ref("expense",row)}`,financing:`${ref("borrowed",row)}-${ref("repaid",row)}-${ref("lent",row)}+${ref("recovered",row)}-${ref("purchases",row)}+${ref("sales",row)}`,netCash:`${ref("operating",row)}+${ref("financing",row)}`,netWorth:`${ref("assets",row)}-${ref("liabilities",row)}`})){
+      const cell=summary[ref(key,row)];if(cell){cell.f=formula;cell.z='#,##0.00;(#,##0.00);"-"';}
+    }
+  }
   append("Bank Inbox",[...(db.bankSync?.rows??[]).map(r=>({recordType:"row",payload:JSON.stringify(r)})),...(db.bankSync?.rules??[]).map(r=>({recordType:"rule",payload:JSON.stringify(r)})),{recordType:"metadata",payload:JSON.stringify({version:2,exportedAt:today,dateFormat:"ISO YYYY-MM-DD",currency:"INR"})}]);
   return wb;
 }

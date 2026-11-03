@@ -1,4 +1,5 @@
-import { utils, read, SSF } from "xlsx";
+import XLSX from "xlsx";
+const { utils, read, SSF } = XLSX;
 import { emiSchedule, loanSummary, deriveDateFields } from "./accountingEngine";
 import { daysInMonth } from "./format";
 import { txMeta, TX_TYPES, type DB, type StagedBankRow, type Transaction, type MerchantRule } from "./types";
@@ -133,7 +134,7 @@ export function stagedTransaction(row:StagedBankRow,db:DB):Transaction {
 }
 export function approveBankRows(db:DB,ids:string[]) {
   let next=db;const errors:string[]=[];let approved=0;
-  const rows=[...(db.bankSync?.rows??[])];
+  const rows=(db.bankSync?.rows??[]).map(r=>({...r}));
   const known=new Set(db.transactions.map(t=>bankFingerprint(t)));
   for(const row of rows.filter(r=>ids.includes(r.id) && r.status==="PENDING").sort((a,b)=>a.date.localeCompare(b.date))){
     try{if(known.has(row.fingerprint))throw new Error("Already in register");const tx=stagedTransaction(row,next);next={...next,transactions:[...next.transactions,tx]};known.add(row.fingerprint);row.status="APPROVED";approved++;}

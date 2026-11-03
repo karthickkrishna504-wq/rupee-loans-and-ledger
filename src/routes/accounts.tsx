@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { useDB, upsert, removeItem, uid } from "@/lib/store";
 import { accountStatement } from "@/lib/accountingEngine";
 import { inr, todayISO } from "@/lib/format";
@@ -25,6 +25,7 @@ export const Route = createFileRoute("/accounts")({
 function Accounts() {
   const db = useDB();
   const [form, setForm] = useState<{ name: string; type: Account["type"]; opening: string }>({ name: "", type: "Savings", opening: "" });
+  const [editing, setEditing] = useState<string | null>(null);
   const stmts = db.accounts.map((a) => ({ a, s: accountStatement(a, db.transactions) }));
   const total = stmts.reduce((x, y) => x + y.s.closing, 0);
   const unexplained = stmts.reduce((x, y) => x + Math.abs(y.s.variance ?? 0), 0);
@@ -45,7 +46,7 @@ function Accounts() {
             <Panel key={a.id}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="font-semibold">{a.name}</div>
+                  <div className="flex items-center gap-2 font-semibold">{a.name}<Button variant="ghost" size="icon" aria-label={`Edit account ${a.name}`} onClick={() => {setEditing(a.id);setForm({name:a.name,type:a.type,opening:String(a.openingBalance)});}}><Pencil className="size-3" /></Button></div>
                   <div className="text-xs text-muted-foreground">{a.type}</div>
                 </div>
                 <div className="text-right">
@@ -83,13 +84,14 @@ function Accounts() {
           );
         })}
 
-        <Panel title="Add account">
+        <Panel title={editing ? "Edit account" : "Add account"}>
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="SBI Savings" /></Field>
             <Field label="Type"><Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as Account["type"] })}>{ACCOUNT_TYPES.map((t) => <option key={t}>{t}</option>)}</Select></Field>
             <Field label="Opening balance (₹)"><Input type="number" value={form.opening} onChange={(e) => setForm({ ...form, opening: e.target.value })} /></Field>
           </div>
-          <Button className="mt-3" disabled={!form.name} onClick={() => { upsert("accounts", { id: uid("ACC"), name: form.name, type: form.type, openingBalance: Number(form.opening) || 0 }); setForm({ name: "", type: "Savings", opening: "" }); }}><Plus /> Add account</Button>
+          <Button className="mt-3" disabled={!form.name.trim() || !Number.isFinite(Number(form.opening))} onClick={() => { const old=db.accounts.find(a=>a.id===editing);upsert("accounts", { ...old, id: editing??uid("ACC"), name: form.name.trim(), type: form.type, openingBalance: Number(form.opening) || 0 });setEditing(null); setForm({ name: "", type: "Savings", opening: "" }); }}><Plus /> {editing?"Save account":"Add account"}</Button>
+          {editing && <Button variant="ghost" className="mt-3" onClick={()=>{setEditing(null);setForm({name:"",type:"Savings",opening:""});}}>Cancel</Button>}
         </Panel>
       </div>
     </div>

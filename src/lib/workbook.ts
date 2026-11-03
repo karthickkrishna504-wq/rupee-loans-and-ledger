@@ -1,4 +1,4 @@
-import XLSX from "xlsx";
+import * as XLSX from "xlsx";
 import { z } from "zod";
 import { annualStatements, interestLedger, principalMovements, emiSchedule } from "./accountingEngine";
 import { TX_TYPES, type DB } from "./types";

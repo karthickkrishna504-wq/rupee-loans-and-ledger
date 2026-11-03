@@ -1,4 +1,4 @@
-import XLSX from "xlsx";
+import * as XLSX from "xlsx";
 const { utils, read, SSF } = XLSX;
 import { emiSchedule, loanSummary, deriveDateFields } from "./accountingEngine";
 import { daysInMonth } from "./format";

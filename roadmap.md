@@ -8,4 +8,4 @@
 - [x] Review-first CSV/Excel/SMS bank inbox, duplicate protection, loan suggestions and merchant rules.
 - [x] Expenses/budgets, assets/net worth, cash flow, commitments, annual statements, goals and configuration.
 - [x] Nine-scenario accounting audit and full 15-sheet Excel/JSON export and restore.
-- [ ] Verify approval, backups and planning flows with accounting regression tests.
+- [x] Verify approval, backups and planning flows with accounting regression tests.

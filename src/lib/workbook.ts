@@ -51,7 +51,7 @@ export function buildWorkbook(db:DB,today=todayISO()) {
 }
 export function readWorkbook(wb:XLSX.WorkBook):DB {
   const required=["Transactions","Accounts","Borrowings","Lending","EMI Loans","Budgets","Assets","Obligations","Goals","Configuration","Bank Inbox"];
-  if(required.some(s=>!wb.SheetNames.includes(s)))throw new Error("Not a full Khata workbook; use Bank Sync for bank statements");
+  if(required.some(s=>!wb.SheetNames.includes(s)))throw new Error("Not a full Kanakku workbook; use Bank Sync for bank statements");
   const rows=(name:string)=>decode(XLSX.utils.sheet_to_json<Record<string,unknown>>(wb.Sheets[name],{defval:undefined}));
   const config=Object.fromEntries(rows("Configuration").map(r=>[r["key"],typeof r["value"]==="string"?JSON.parse(r["value"]):r["value"]]));
   const inbox=rows("Bank Inbox");const payload=(kind:string)=>inbox.filter(r=>r["recordType"]===kind).map(r=>typeof r["payload"]==="string"?JSON.parse(r["payload"]):r["payload"]);

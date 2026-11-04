@@ -14,9 +14,9 @@ import type { DB, MasterConfig } from "@/lib/types";
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Settings & Backup — Khata ERP" },
+      { title: "Settings & Backup — Kanakku" },
       { name: "description", content: "Validation data loader, JSON/Excel backups and editable categories." },
-      { property: "og:title", content: "Settings & Backup — Khata ERP" },
+      { property: "og:title", content: "Settings & Backup — Kanakku" },
       { property: "og:description", content: "Manage data, backups and master configuration." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

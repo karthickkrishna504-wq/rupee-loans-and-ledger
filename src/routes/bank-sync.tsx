@@ -11,7 +11,7 @@ import { TX_TYPES, txMeta, type StagedBankRow, type Transaction } from "@/lib/ty
 import { emiSchedule } from "@/lib/accountingEngine";
 import { inr, fmtDate, todayISO } from "@/lib/format";
 
-export const Route=createFileRoute("/bank-sync")({head:()=>({meta:[{title:"Bank Sync & Review Inbox — Khata ERP"},{name:"description",content:"Review Indian bank statements and UPI alerts before approving linked ledger entries."},{property:"og:title",content:"Bank Sync — Khata ERP"},{property:"og:description",content:"Private, review-first bank statement and UPI import."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"}]}),component:BankSync});
+export const Route=createFileRoute("/bank-sync")({head:()=>({meta:[{title:"Bank Sync & Review Inbox — Kanakku"},{name:"description",content:"Review Indian bank statements and UPI alerts before approving linked ledger entries."},{property:"og:title",content:"Bank Sync — Kanakku"},{property:"og:description",content:"Private, review-first bank statement and UPI import."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"}]}),component:BankSync});
 function BankSync(){
   const db=useDB(),file=useRef<HTMLInputElement>(null);
   const [account,setAccount]=useState(""),[sms,setSms]=useState(""),[date,setDate]=useState(todayISO()),[selected,setSelected]=useState<string[]>([]),[editing,setEditing]=useState<StagedBankRow|null>(null),[messages,setMessages]=useState<string[]>([]),[busy,setBusy]=useState(false),[view,setView]=useState("PENDING"),[drag,setDrag]=useState(false);

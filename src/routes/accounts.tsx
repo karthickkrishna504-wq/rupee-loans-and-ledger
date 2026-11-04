@@ -11,9 +11,9 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/accounts")({
   head: () => ({
     meta: [
-      { title: "Bank & Cash Accounts — Khata ERP" },
+      { title: "Bank & Cash Accounts — Kanakku" },
       { name: "description", content: "Live bank, cash and wallet balances with statement reconciliation." },
-      { property: "og:title", content: "Bank & Cash Accounts — Khata ERP" },
+      { property: "og:title", content: "Bank & Cash Accounts — Kanakku" },
       { property: "og:description", content: "Opening + inflows − outflows ± transfers = closing, reconciled against your bank statement." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

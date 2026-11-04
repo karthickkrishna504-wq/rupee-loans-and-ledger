@@ -10,7 +10,7 @@ import { budgetStatement, assetValues, expenseOf, summarize, filterByPeriod, mon
 import { inr, todayISO, fmtDate } from "@/lib/format";
 import type { Asset, Goal, Transaction } from "@/lib/types";
 
-export const Route=createFileRoute("/planning")({head:()=>({meta:[{title:"Budgets, Assets & Goals — Khata ERP"},{name:"description",content:"Monthly expense budgets, asset valuations and emergency fund planning in Indian rupees."},{property:"og:title",content:"Financial Planning — Khata ERP"},{property:"og:description",content:"Track spending, investments and goals from your central ledger."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"}]}),component:Planning});
+export const Route=createFileRoute("/planning")({head:()=>({meta:[{title:"Budgets, Assets & Goals — Kanakku"},{name:"description",content:"Monthly expense budgets, asset valuations and emergency fund planning in Indian rupees."},{property:"og:title",content:"Financial Planning — Kanakku"},{property:"og:description",content:"Track spending, investments and goals from your central ledger."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"}]}),component:Planning});
 function Planning(){
   const db=useDB();const [tab,setTab]=useState("Expenses"),[month,setMonth]=useState(todayISO().slice(0,7)),[filters,setFilters]=useState<Record<string,string>>({}),[category,setCategory]=useState(""),[limit,setLimit]=useState(""),[asset,setAsset]=useState<Asset|null>(null),[goal,setGoal]=useState<Goal|null>(null),[months,setMonths]=useState(6);
   const expenses=filterByPeriod(db.transactions,`M:${month}`).filter(t=>expenseOf(t)!==0 && Object.entries(filters).every(([k,v])=>!v || t[k as keyof Transaction]===v));

@@ -15,9 +15,9 @@ import type { Transaction } from "@/lib/types";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Khata ERP" },
+      { title: "Dashboard — Kanakku" },
       { name: "description", content: "Income, expenses, borrowings, lending, EMIs and net worth at a glance in ₹." },
-      { property: "og:title", content: "Dashboard — Khata ERP" },
+      { property: "og:title", content: "Dashboard — Kanakku" },
       { property: "og:description", content: "Executive finance dashboard for Indian households and private lenders." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

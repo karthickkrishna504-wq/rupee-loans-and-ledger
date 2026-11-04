@@ -1,4 +1,4 @@
-// Indian localisation helpers. Dates are stored as ISO (YYYY-MM-DD) and displayed DD-MM-YYYY.
+// Indian localisation helpers. Dates are stored as ISO (YYYY-MM-DD) and displayed DD MMM YYYY.
 const inrFmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const numFmt = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
 
@@ -20,8 +20,25 @@ export function parts(iso: string) {
 export const fmtDate = (iso?: string) => {
   if (!iso) return "—";
   const { y, m, d } = parts(iso);
-  return `${String(d).padStart(2, "0")}-${String(m).padStart(2, "0")}-${y}`;
+  return `${String(d).padStart(2, "0")} ${MONTHS[m - 1]} ${y}`;
 };
+/** List-friendly date: Today / Yesterday / 04 Nov 2026. */
+export function relDate(iso?: string, today = todayISO()) {
+  if (!iso) return "—";
+  const diff = daysBetween(iso, today);
+  return diff === 0 ? "Today" : diff === 1 ? "Yesterday" : diff === -1 ? "Tomorrow" : fmtDate(iso);
+}
+/** Display money: full Indian grouping or compact (₹9.26 L), true minus sign. */
+export function money(n: number, compact = false) {
+  const v = Math.round(n || 0);
+  const a = Math.abs(v);
+  let body: string;
+  if (compact && a >= 1e7) body = `₹${+(a / 1e7).toFixed(2)} Cr`;
+  else if (compact && a >= 1e5) body = `₹${+(a / 1e5).toFixed(2)} L`;
+  else if (compact && a >= 1e3) body = `₹${+(a / 1e3).toFixed(1)}K`;
+  else body = inrFmt.format(a);
+  return v < 0 ? `−${body}` : body;
+}
 export const toISO = (y: number, m: number, d: number) =>
   `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 export const daysInMonth = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -54,7 +71,7 @@ export function fyStart(iso: string) {
 }
 export const fyLabel = (start: number) => `FY ${start}-${String((start + 1) % 100).padStart(2, "0")}`;
 export const monthKey = (iso: string) => iso.slice(0, 7);
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const monthLabel = (key: string) => {
   const [y, m] = key.split("-").map(Number);
   return `${MONTHS[m - 1]} ${y}`;

@@ -80,7 +80,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Khata ERP — Personal Finance & Private Lending" },
+      { title: "Kanakku — Personal Finance & Private Lending" },
       { name: "description", content: "Indian personal finance and private lending ERP with double-entry style accounting." },
       { name: "theme-color", content: "#141614" },
       { property: "og:type", content: "website" },

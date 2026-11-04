@@ -147,6 +147,10 @@
     -webkit-font-smoothing: antialiased;
   }
   select, input, textarea { font: inherit; }
+  progress { appearance: none; border: 0; border-radius: var(--radius-sm); overflow: hidden; background: var(--muted); color: var(--primary); }
+  progress::-webkit-progress-bar { background: var(--muted); }
+  progress::-webkit-progress-value { background: var(--primary); }
+  progress::-moz-progress-bar { background: var(--primary); }
 }
 
 @utility num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; }

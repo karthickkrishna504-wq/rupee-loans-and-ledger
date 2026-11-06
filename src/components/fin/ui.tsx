@@ -1,14 +1,23 @@
-import { Children, cloneElement, isValidElement, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useState, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
+/** Sticky large-title header that shrinks once the page scrolls. */
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+  const [small, setSmall] = useState(false);
+  useEffect(() => {
+    const on = () => setSmall(window.scrollY > 24);
+    on(); window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
   return (
-    <div className="mb-5 grid grid-cols-1 items-end gap-3 sm:flex sm:justify-between">
-      <div className="min-w-0">
-        <h1 className="text-xl font-bold sm:text-2xl">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+    <div className={cn("sticky top-[60px] z-10 -mx-5 mb-4 bg-background/90 px-5 backdrop-blur transition-[padding] duration-200 ease-out lg:top-0", small ? "py-2" : "py-1")}>
+      <div className="grid grid-cols-1 items-end gap-3 sm:flex sm:justify-between">
+        <div className="min-w-0">
+          <h1 className={cn("truncate font-semibold tracking-tight transition-[font-size] duration-200 ease-out", small ? "text-[19px]" : "text-[26px]")}>{title}</h1>
+          {subtitle && !small && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

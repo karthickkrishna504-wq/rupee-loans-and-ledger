@@ -81,11 +81,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Kanakku — Personal Finance & Private Lending" },
-      { name: "description", content: "Indian personal finance and private lending ERP with double-entry style accounting." },
-      { name: "theme-color", content: "#141614" },
+      { name: "description", content: "Kanakku: a calm personal finance ledger for India — net worth, spending, loans and dues in ₹." },
+      { name: "theme-color", content: "#F6F6F3" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      { property: "og:title", content: "Kanakku — Personal Finance Ledger" },
+      { property: "og:description", content: "A calm personal finance ledger for India." },
+      { name: "apple-mobile-web-app-title", content: "Kanakku" },
+      { name: "application-name", content: "Kanakku" },
     ],
     links: [
       {
@@ -95,7 +98,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" },
     ],
   }),
   shellComponent: RootShell,
@@ -106,7 +109,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en-IN" className="dark" suppressHydrationWarning>
+    <html lang="en-IN" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

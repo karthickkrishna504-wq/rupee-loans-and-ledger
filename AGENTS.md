@@ -11,9 +11,11 @@
 
 ## Architecture rules
 - All money figures derive from `src/lib/accountingEngine.ts` over the transactions list; never store computed balances/outstanding — keeps every screen consistent with the accounting rules.
-- Data persists in localStorage via `src/lib/store.ts` (`useDB`, `upsert`, `saveTx`); dates stored ISO, displayed DD-MM-YYYY via `src/lib/format.ts`.
+- Data persists in localStorage via `src/lib/store.ts` (`useDB`, `upsert`, `saveTx`); dates stored ISO, displayed via the shared helpers in `src/lib/format.ts`.
 - Accounting rules are covered by `src/test/accounting.test.ts`; update it when rules change.
-- Dashboard tabs only partition presentation; calculations and portfolio metrics stay derived from the existing engine.
+- Home and Reports > Insights read aggregates from `src/lib/dashboardData.ts`, a presentation layer over the engine; it computes no new accounting.
+- UI is built from shared components in `src/components/fin/kit.tsx` + `ui.tsx` and tokens in `src/styles.css`; pages add no one-off colours — keeps both themes consistent.
+- Primary navigation is a fixed 5-item list in `AppShell.tsx` (bottom bar on mobile, sidebar ≥1024px); secondary pages live in the avatar menu.
 - Global Quick Entry reuses TransactionDialog and saveTx so every entry retains the same validations and ledger normalization.
 - AI classification is advisory through a server function, constrained to existing transaction types/categories and classification fields; it never saves entries or changes money values.
 - Bank staging and merchant rules live in the same local DB backup; bulk approval validates links, directions, splits, principal limits and fingerprints before updating transactions and inbox together.

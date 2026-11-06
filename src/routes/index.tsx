@@ -1,202 +1,232 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AlertCircle, CalendarClock, CheckCircle2, ChevronRight, HandCoins, Inbox, Landmark, Receipt } from "lucide-react";
 import { useDB } from "@/lib/store";
-import { filterByPeriod, portfolio, summarize } from "@/lib/accountingEngine";
-import { addMonths, fyLabel, fyStart, inr, inrCompact, monthKey, monthLabel, monthShort, todayISO } from "@/lib/format";
-import { Badge, PageHeader, Panel, Select, Stat } from "@/components/fin/ui";
-import { Button } from "@/components/ui/button";
-import { ArrowDownLeft, ArrowUpRight, Wallet, Landmark, HandCoins, TrendingUp, ShieldCheck, ChevronRight, Activity } from "lucide-react";
+import { summarize, filterByPeriod } from "@/lib/accountingEngine";
+import { computeDashboard, monthSeries, monthsFor, upcomingDues, categoryColorMap } from "@/lib/dashboardData";
+import { fyLabel, fyStart, monthKey, monthLabel, relDate, todayISO, money } from "@/lib/format";
+import { Avatar, useProfile } from "@/components/fin/AppShell";
+import { CardLink, ChartCard, CountUpMoney, DeltaChip, ListRow, MoneyText, SectionCard, SegmentedTabs, Skeleton, StatCard, chartAxis, chartGrid, chartMoney, chartTip } from "@/components/fin/kit";
 import { cn } from "@/lib/utils";
-import type { Transaction } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Kanakku" },
-      { name: "description", content: "Income, expenses, borrowings, lending, EMIs and net worth at a glance in ₹." },
-      { property: "og:title", content: "Dashboard — Kanakku" },
-      { property: "og:description", content: "Executive finance dashboard for Indian households and private lenders." },
+      { title: "Home — Kanakku" },
+      { name: "description", content: "Your net worth, monthly cash flow, spending, loans and upcoming dues in ₹ at a glance." },
+      { property: "og:title", content: "Home — Kanakku" },
+      { property: "og:description", content: "A calm overview of your money: net worth, cash flow, debts and dues." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: Dashboard,
+  component: HomePage,
 });
 
-const C = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
-const tip = { contentStyle: { background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }, labelStyle: { color: "var(--muted-foreground)" }, formatter: (v: number) => `${inr(v)} · ${chartMoney(v)}` };
-const axis = { stroke: "var(--muted-foreground)", fontSize: 11, tickLine: false, axisLine: false, minTickGap: 20 };
+function greeting() { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
 
-function monthsFor(period: string, txs: Transaction[], today: string) {
-  if (period.startsWith("FY:")) { const y = Number(period.slice(3)); return Array.from({ length: 12 }, (_, i) => monthKey(addMonths(`${y}-04-01`, i))); }
-  if (period.startsWith("M:")) { const end = `${period.slice(2)}-01`; return Array.from({ length: 6 }, (_, i) => monthKey(addMonths(end, i - 5))); }
-  const keys = [...new Set(txs.map((t) => monthKey(t.date)))].sort();
-  return keys.length ? keys : [monthKey(today)];
+function HomePage() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  return ready ? <Home /> : <HomeSkeleton />;
 }
 
-function Dashboard() {
+function HomeSkeleton() {
+  return <div className="space-y-4"><Skeleton className="h-10 w-2/3 rounded-full" /><Skeleton className="h-64 rounded-[var(--radius-card)]" /><Skeleton className="h-40 rounded-[var(--radius-card)]" /><Skeleton className="h-64 rounded-[var(--radius-card)]" /></div>;
+}
+
+function Home() {
   const db = useDB();
   const today = todayISO();
-  const [tab, setTab] = useState("Overview");
-  const [full, setFull] = useState(false);
-  const [activeChart, setActiveChart] = useState(0);
-  const [period, setPeriod] = useState(`FY:${fyStart(today)}`);
+  const { name } = useProfile();
+  const [fy, setFy] = useState(fyStart(today));
+  const [scope, setScope] = useState<"month" | "fy">("month");
+  const [range, setRange] = useState<"L:6" | "L:12" | "FY">("L:6");
 
-  const opts = useMemo(() => {
-    const months = [...new Set([monthKey(today), ...db.transactions.map((t) => monthKey(t.date))])].sort().reverse();
-    const fys = [...new Set([fyStart(today), ...db.transactions.map((t) => fyStart(t.date))])].sort().reverse();
-    return { months, fys };
-  }, [db.transactions, today]);
+  const fys = useMemo(() => [...new Set([fyStart(today), ...db.transactions.map((t) => fyStart(t.date))])].sort().reverse(), [db.transactions, today]);
+  const d = useMemo(() => computeDashboard(db, `FY:${fy}`, today), [db, fy, today]);
+  const { pf, thisMonth } = d;
+  const fySummary = d.s;
+  const period = scope === "month" ? thisMonth : fySummary;
 
-  const pf = useMemo(() => portfolio(db, today), [db, today]);
-  const txs = useMemo(() => filterByPeriod(db.transactions, period), [db.transactions, period]);
-  const s = useMemo(() => summarize(txs), [txs]);
-  const thisMonth = useMemo(() => summarize(filterByPeriod(db.transactions, `M:${monthKey(today)}`)), [db.transactions, today]);
+  const flow = useMemo(() => monthSeries(db, monthsFor(range === "FY" ? `FY:${fy}` : range, db.transactions, today)), [db, range, fy, today]);
+  // Net worth path: today's net worth stepped back by each later month's savings (income − expense).
+  const spark = useMemo(() => {
+    const ser = monthSeries(db, monthsFor("L:6", db.transactions, today));
+    let nw = pf.netWorth; const out: { v: number }[] = [];
+    for (let i = ser.length - 1; i >= 0; i--) { out.unshift({ v: nw }); nw -= ser[i].Savings; }
+    return out;
+  }, [db, pf.netWorth, today]);
 
-  const months = monthsFor(period, db.transactions, today);
-  const series = months.map((k) => {
-    const m = summarize(db.transactions.filter((t) => monthKey(t.date) === k));
-    return { month: monthShort(k), Income: m.income, Expense: m.expense, Savings: m.savings, "Interest Paid": m.interestPaid + m.emiInterest, "Interest Received": m.interestReceived, Inflow: m.inflow, Outflow: m.outflow };
-  });
-  const pie = Object.entries(s.byCategory).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
-  const byLender = pf.borrowings.map((x) => ({ name: x.loan.counterparty, value: x.s.outstanding })).concat(pf.emis.map((x) => ({ name: `${x.loan.lender} EMI`, value: x.s.outstanding })));
-  const byBorrower = pf.lendings.map((x) => ({ name: x.loan.counterparty, value: x.s.outstanding }));
-  const emi12 = Array.from({ length: 12 }, (_, i) => {
-    const k = monthKey(addMonths(today, i, 1));
-    return { month: monthShort(k), EMI: pf.emis.reduce((sum, e) => sum + e.s.rows.filter((r) => monthKey(r.dueDate) === k).reduce((a, r) => a + r.emi, 0), 0) };
-  });
-  const debtProgress = [
-    ...pf.borrowings.map((x) => ({ name: x.loan.loanId, total: x.s.original + x.s.additional, repaid: x.s.repaid })),
-    ...pf.emis.map((x) => ({ name: x.loan.loanId, total: x.loan.originalAmount, repaid: x.loan.originalAmount - x.s.outstanding })),
-  ].map((d) => ({ name: d.name, "Repaid %": d.total ? Math.round((d.repaid / d.total) * 100) : 0 }));
+  const spendTxs = scope === "month" ? filterByPeriod(db.transactions, `M:${monthKey(today)}`) : d.txs;
+  const cats = useMemo(() => {
+    const all = Object.entries(summarize(spendTxs).byCategory).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    const top = all.slice(0, 5).map(([name, value]) => ({ name, value }));
+    const other = all.slice(5).reduce((n, [, v]) => n + v, 0);
+    return other > 0 ? [...top, { name: "Other", value: other }] : top;
+  }, [spendTxs]);
+  const catTotal = cats.reduce((n, c) => n + c.value, 0);
+  const colors = categoryColorMap(db, cats.map((c) => c.name));
 
-  // 8 health indicators
-  const avgExp = series.length ? series.reduce((a, b) => a + b.Expense, 0) / Math.max(1, series.filter((x) => x.Expense > 0).length) : 0;
-  const avgInc = series.length ? series.reduce((a, b) => a + b.Income, 0) / Math.max(1, series.filter((x) => x.Income > 0).length) : 0;
-  const discretionary = txs.filter((t) => t.essentialOrDiscretionary === "Discretionary").reduce((a, t) => a + t.amount, 0);
-  const grade = (v: number, good: number, warn: number, higherBetter = true) =>
-    (higherBetter ? v >= good : v <= good) ? "Healthy" : (higherBetter ? v >= warn : v <= warn) ? "Caution" : "Critical";
-  const health = [
-    { name: "Savings rate", value: `${s.savingsRate.toFixed(1)}%`, status: grade(s.savingsRate, 20, 10), note: "Target ≥ 20%" },
-    { name: "Debt-to-income (FOIR)", value: `${avgInc ? ((pf.monthlyObligations / avgInc) * 100).toFixed(1) : 0}%`, status: grade(avgInc ? (pf.monthlyObligations / avgInc) * 100 : 0, 40, 55, false), note: "Banks prefer ≤ 40%" },
-    { name: "Emergency fund", value: `${avgExp ? (pf.cash / avgExp).toFixed(1) : "∞"} months`, status: grade(avgExp ? pf.cash / avgExp : 99, 6, 3), note: "Cash ÷ avg monthly spend" },
-    { name: "Interest coverage", value: `${s.interestPaid + s.emiInterest ? (s.interestReceived / (s.interestPaid + s.emiInterest)).toFixed(2) : "—"}×`, status: grade(s.interestPaid + s.emiInterest ? s.interestReceived / (s.interestPaid + s.emiInterest) : 1, 1, 0.5), note: "Interest received ÷ paid" },
-    { name: "Overdue receivables", value: inr(pf.overdueReceivables), status: grade(pf.overdueReceivables, 0, 10000, false), note: "Unpaid interest from borrowers" },
-    { name: "Overdue payables", value: inr(pf.overduePayables), status: grade(pf.overduePayables, 0, 10000, false), note: "Interest you owe lenders" },
-    { name: "Leverage", value: `${pf.totalAssets ? ((pf.totalLiabilities / pf.totalAssets) * 100).toFixed(0) : 0}%`, status: grade(pf.totalAssets ? (pf.totalLiabilities / pf.totalAssets) * 100 : 0, 50, 75, false), note: "Liabilities ÷ assets" },
-    { name: "Discretionary spend", value: `${s.expense ? ((discretionary / s.expense) * 100).toFixed(0) : 0}%`, status: grade(s.expense ? (discretionary / s.expense) * 100 : 0, 30, 45, false), note: "Share of tagged wants" },
-  ];
+  const dues = upcomingDues(db, today, 30);
+  const pending = (db.bankSync?.rows ?? []).filter((r) => r.status === "PENDING").length;
+  const attention = [
+    pf.overdueReceivables > 0 && { key: "rec", icon: <HandCoins className="size-5" />, title: "Overdue from borrowers", sub: "Interest not yet collected", amount: pf.overdueReceivables, to: "/loans" },
+    pf.overduePayables > 0 && { key: "pay", icon: <AlertCircle className="size-5" />, title: "Overdue to lenders", sub: "Interest you still owe", amount: pf.overduePayables, to: "/loans" },
+    pending > 0 && { key: "inbox", icon: <Inbox className="size-5" />, title: `${pending} bank ${pending === 1 ? "entry" : "entries"} to review`, sub: "Waiting in Bank Sync inbox", to: "/bank-sync" },
+  ].filter(Boolean) as { key: string; icon: React.ReactNode; title: string; sub: string; amount?: number; to: string }[];
 
-  const plabel = period === "ALL" ? "All time" : period.startsWith("M:") ? monthLabel(period.slice(2)) : fyLabel(Number(period.slice(3)));
-  const cards = [
-    { label: "Total income", value: inr(s.income), hint: plabel, tone: "good" as const },
-    { label: "Total expenses", value: inr(s.expense), hint: "Incl. interest, excl. principal", tone: "bad" as const },
-    { label: "Savings", value: inr(s.savings), hint: plabel, tone: s.savings >= 0 ? ("good" as const) : ("bad" as const) },
-    { label: "Savings rate", value: `${s.savingsRate.toFixed(1)}%`, hint: plabel },
-    { label: "Outstanding borrowings", value: inr(pf.borrowOut + pf.emiOut), hint: `Private ${inrCompact(pf.borrowOut)} · EMI ${inrCompact(pf.emiOut)}` },
-    { label: "Principal lent out", value: inr(pf.lentOut), hint: `${pf.lendings.filter((x) => x.s.outstanding > 0).length} active borrowers` },
-    { label: "Interest paid (month)", value: inr(thisMonth.interestPaid + thisMonth.emiInterest), hint: monthLabel(monthKey(today)), tone: "bad" as const },
-    { label: "Interest received (month)", value: inr(thisMonth.interestReceived), hint: "Realised only", tone: "good" as const },
-    { label: "EMI payments (month)", value: inr(thisMonth.emiPaid), hint: `Principal ${inrCompact(thisMonth.emiPrincipal)}` },
-    { label: "Monthly debt obligations", value: inr(pf.monthlyObligations), hint: "EMIs + interest due" },
-    { label: "Cash & bank", value: inr(pf.cash), hint: `${db.accounts.length} accounts`, tone: "brand" as const },
-    { label: "Net worth", value: inr(pf.netWorth), hint: `Assets ${inrCompact(pf.totalAssets)}`, tone: "brand" as const },
-    { label: "Overdue receivables", value: inr(pf.overdueReceivables), tone: pf.overdueReceivables ? ("warn" as const) : ("default" as const) },
-    { label: "Overdue payables", value: inr(pf.overduePayables), tone: pf.overduePayables ? ("bad" as const) : ("default" as const) },
-    { label: "Upcoming EMIs (30d)", value: inr(pf.upcomingEmiAmount), hint: `${pf.upcomingEmis.length} instalment(s)` },
-    { label: "Net interest cash flow", value: inr(s.interestReceived - s.interestPaid - s.emiInterest), hint: plabel, tone: s.interestReceived - s.interestPaid - s.emiInterest >= 0 ? ("good" as const) : ("bad" as const) },
-  ];
+  const healthy = d.health.filter((h) => h.status === "Healthy").length;
+  const weakest = d.health.find((h) => h.status === "Critical") ?? d.health.find((h) => h.status === "Caution");
 
   return (
-    <div>
-      <PageHeader
-        title="Executive dashboard"
-        subtitle={`${plabel} · as of ${today.split("-").reverse().join("-")}`}
-        actions={
-          <Select value={period} onChange={(e) => setPeriod(e.target.value)} className="w-48 md:mr-8">
-            <option value="ALL">All time</option>
-            <optgroup label="Financial year">{opts.fys.map((y) => <option key={y} value={`FY:${y}`}>{fyLabel(y)}</option>)}</optgroup>
-            <optgroup label="Month">{opts.months.map((m) => <option key={m} value={`M:${m}`}>{monthLabel(m)}</option>)}</optgroup>
-          </Select>
-        }
-      />
-
-      <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-        <div role="tablist" aria-label="Dashboard views" className="dashboard-tabs flex min-w-0 gap-1 overflow-x-auto rounded-full border bg-surface p-1">
-          {["Overview", "Debt & Lending", "Analytics", "Health Score"].map((name) => <Button key={name} role="tab" aria-selected={tab === name} variant="ghost" size="sm" onClick={() => setTab(name)} className={cn("shrink-0 rounded-full px-4", tab === name ? "bg-foreground text-background hover:bg-foreground hover:text-background" : "text-muted-foreground")}>{name}{name === "Analytics" && <span className="tab-count">10</span>}{name === "Health Score" && <span className="tab-count">8</span>}</Button>)}
+    <div className="space-y-4">
+      {/* 1. Header */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pb-1">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar name={name} className="size-11" />
+          <div className="min-w-0"><div className="text-[12.5px] text-muted-foreground">{greeting()}{name ? "," : ""}</div><h1 className="truncate text-[22px] font-semibold tracking-tight">{name || "Welcome back"}</h1></div>
         </div>
-        <div className="hidden items-center rounded-full border p-1 md:flex">{[false, true].map((v) => <Button key={String(v)} size="sm" variant="ghost" aria-pressed={full === v} onClick={() => setFull(v)} className={cn("rounded-full text-xs", full === v && "bg-muted")}>{v ? "Full view" : "Compact"}</Button>)}</div>
+        <label className="relative">
+          <span className="sr-only">Financial year</span>
+          <select value={fy} onChange={(e) => setFy(Number(e.target.value))} className="pressable h-9 appearance-none rounded-full border bg-card pl-3.5 pr-8 text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {fys.map((y) => <option key={y} value={y}>{fyLabel(y)}</option>)}
+          </select>
+          <ChevronRight className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-muted-foreground" />
+        </label>
       </div>
 
-      <div className="dashboard-content" data-full={full}>
-      {(tab === "Overview" || full) && <>
-        <section className="wealth-banner relative mb-5 overflow-hidden rounded-lg border p-5 sm:p-7">
-          <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-xs font-medium text-wealth-muted"><Wallet className="size-4" /> TOTAL NET WORTH</span><span className="text-xs text-wealth-muted">{plabel}</span></div>
-          <div className="num mt-3 whitespace-nowrap text-3xl font-semibold sm:text-5xl">{inr(pf.netWorth)}</div>
-          <span className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-wealth-muted/20 bg-wealth-muted/10 px-2.5 py-1 text-[10px] text-wealth-muted"><Activity className="size-3" /> Net interest cash flow <span className="num text-wealth-foreground">{inr(s.interestReceived - s.interestPaid - s.emiInterest)}</span></span>
-          <div className="mt-6 grid grid-cols-3 gap-2 border-t border-wealth-muted/20 pt-4">{[["Cash & bank", pf.cash], ["Total assets", pf.totalAssets], ["Total liabilities", pf.totalLiabilities]].map(([label, value]) => <div key={label} className="min-w-0"><div className="text-[10px] text-wealth-muted sm:text-xs">{label}</div><div className="num mt-1 whitespace-nowrap text-xs font-medium sm:text-lg">{inr(Number(value))}</div></div>)}</div>
-        </section>
-        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">{[0, 1, 2, 3, 5, 9].map((i) => <Metric key={cards[i].label} {...cards[i]} index={i} />)}</div>
-        <div className="mb-6 flex gap-3 overflow-x-auto pb-1" aria-label="Urgent financial alerts">{[12, 13, 14].map((i) => <a key={i} href="/loans" className={cn("alert-item flex min-w-[210px] flex-1 items-center gap-3 rounded-lg border p-3", i === 14 ? "border-warning/25 bg-warning/5" : "border-destructive/20 bg-destructive/5")}><span className={cn("grid size-8 shrink-0 place-items-center rounded-full", i === 14 ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive")}><Activity className="size-4" /></span><div className="min-w-0"><div className="text-[10px] text-muted-foreground">{cards[i].label}</div><div className="num whitespace-nowrap text-sm font-semibold">{cards[i].value}</div></div><ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" /></a>)}</div>
-      </>}
-      {(tab === "Debt & Lending" || full) && <><div className="mb-3 mt-6 flex items-center gap-2"><HandCoins className="size-4 text-info" /><h2 className="text-sm font-semibold">Debt & lending</h2></div><div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">{[4, 5, 6, 7, 8, 9, 14, 15].map((i) => <Metric key={i} {...cards[i]} index={i} />)}</div></>}
-      {(tab === "Health Score" || full) && <><div className="mb-4 mt-6 flex items-center gap-2"><ShieldCheck className="size-4 text-primary" /><h2 className="text-sm font-semibold">Financial health</h2><span className="ml-auto text-xs text-muted-foreground">{health.filter((h) => h.status === "Healthy").length} / 8 healthy</span></div><div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">{health.map((h) => <div key={h.name} className="panel min-w-0 p-3 sm:p-4"><div className="text-[11px] text-muted-foreground">{h.name}</div><div className="num my-2 whitespace-nowrap text-base font-semibold">{h.value}</div><div className="mb-3 h-1 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full", h.status === "Healthy" ? "w-full bg-success" : h.status === "Caution" ? "w-2/3 bg-warning" : "w-1/3 bg-destructive")} /></div><Badge>{h.status}</Badge><p className="mt-2 text-[10px] text-muted-foreground">{h.note}</p></div>)}</div></>}
-      {(tab === "Analytics" || full) && <div className="mb-4 mt-6"><h2 className="text-sm font-semibold">Analytics <span className="font-normal text-muted-foreground">/ 10 charts</span></h2>{!full && <div className="mt-3 flex gap-2 overflow-x-auto pb-2">{CHART_NAMES.map((n, i) => <Button key={n} variant={i === activeChart ? "secondary" : "ghost"} size="sm" onClick={() => setActiveChart(i)} className="shrink-0"><span className="text-muted-foreground">{String(i + 1).padStart(2, "0")}</span>{n}</Button>)}</div>}</div>}
-      <div className={cn("chart-gallery grid gap-4 lg:grid-cols-2", tab === "Health Score" && !full && "hidden")} data-tab={tab} data-chart={activeChart}>
-        <Chart title="Income vs expense">
-          <BarChart data={series}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="month" {...axis} /><YAxis {...axis} tickFormatter={chartMoney} width={60} /><Tooltip {...tip} /><Legend wrapperStyle={{ fontSize: 12 }} /><Bar dataKey="Income" fill={C[0]} radius={[6, 6, 0, 0]} /><Bar dataKey="Expense" fill={C[1]} radius={[6, 6, 0, 0]} /></BarChart>
-        </Chart>
-        <Chart title="Savings trend">
-          <LineChart data={series}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="month" {...axis} /><YAxis {...axis} tickFormatter={chartMoney} width={60} /><Tooltip {...tip} /><Line dataKey="Savings" stroke={C[0]} strokeWidth={2.5} dot={false} /></LineChart>
-        </Chart>
-        <Chart title={`Expense by category · ${plabel}`}>
-          <PieChart><Pie data={pie} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="85%" paddingAngle={2} stroke="none">{pie.map((_, i) => <Cell key={i} fill={C[i % 5]} />)}</Pie><Tooltip {...tip} /><Legend wrapperStyle={{ fontSize: 11 }} /></PieChart>
-        </Chart>
-        <Chart title="Borrowings by lender (outstanding)">
-          <BarChart data={byLender} layout="vertical"><XAxis type="number" {...axis} tickFormatter={chartMoney} /><YAxis type="category" dataKey="name" {...axis} width={110} /><Tooltip {...tip} /><Bar dataKey="value" name="Outstanding" fill={C[1]} radius={[0, 4, 4, 0]} /></BarChart>
-        </Chart>
-        <Chart title="Lending by borrower (outstanding)">
-          <BarChart data={byBorrower} layout="vertical"><XAxis type="number" {...axis} tickFormatter={chartMoney} /><YAxis type="category" dataKey="name" {...axis} width={110} /><Tooltip {...tip} /><Bar dataKey="value" name="Outstanding" fill={C[2]} radius={[0, 4, 4, 0]} /></BarChart>
-        </Chart>
-        <Chart title="Interest paid vs received">
-          <BarChart data={series}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="month" {...axis} /><YAxis {...axis} tickFormatter={chartMoney} width={60} /><Tooltip {...tip} /><Legend wrapperStyle={{ fontSize: 12 }} /><Bar dataKey="Interest Paid" fill={C[1]} radius={[6, 6, 0, 0]} /><Bar dataKey="Interest Received" fill={C[0]} radius={[6, 6, 0, 0]} /></BarChart>
-        </Chart>
-        <Chart title="EMI commitments · next 12 months">
-          <BarChart data={emi12}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="month" {...axis} /><YAxis {...axis} tickFormatter={chartMoney} width={60} /><Tooltip {...tip} /><Bar dataKey="EMI" fill={C[3]} radius={[6, 6, 0, 0]} /></BarChart>
-        </Chart>
-        <Chart title="Cash inflow vs outflow">
-          <AreaChart data={series}><defs><linearGradient id="cash-inflow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C[0]} stopOpacity={0.35} /><stop offset="100%" stopColor={C[0]} stopOpacity={0.02} /></linearGradient><linearGradient id="cash-outflow" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C[1]} stopOpacity={0.25} /><stop offset="100%" stopColor={C[1]} stopOpacity={0.02} /></linearGradient></defs><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="month" {...axis} /><YAxis {...axis} tickFormatter={chartMoney} width={60} /><Tooltip {...tip} /><Legend wrapperStyle={{ fontSize: 12 }} /><Area dataKey="Inflow" stroke={C[0]} fill="url(#cash-inflow)" /><Area dataKey="Outflow" stroke={C[1]} fill="url(#cash-outflow)" /></AreaChart>
-        </Chart>
-        <Chart title="Assets vs liabilities">
-          <BarChart data={[
-            { name: "Cash & bank", Assets: pf.cash }, { name: "Receivables", Assets: pf.lentOut }, { name: "Investments", Assets: pf.invested + pf.otherAssets },
-            { name: "Private loans", Liabilities: pf.borrowOut }, { name: "EMI loans", Liabilities: pf.emiOut },
-          ]}><CartesianGrid stroke="var(--border)" vertical={false} /><XAxis dataKey="name" {...axis} /><YAxis {...axis} tickFormatter={chartMoney} width={60} /><Tooltip {...tip} /><Bar dataKey="Assets" stackId="a" fill={C[0]} radius={[6, 6, 0, 0]} /><Bar dataKey="Liabilities" stackId="a" fill={C[1]} radius={[6, 6, 0, 0]} /></BarChart>
-        </Chart>
-        <Chart title="Debt repayment progress">
-          <BarChart data={debtProgress} layout="vertical"><XAxis type="number" domain={[0, 100]} {...axis} unit="%" /><YAxis type="category" dataKey="name" {...axis} width={80} /><Tooltip {...tip} formatter={(v: number) => `${v}%`} /><Bar dataKey="Repaid %" fill={C[2]} radius={[0, 4, 4, 0]} background={{ fill: "var(--muted)", radius: 4 }} /></BarChart>
-        </Chart>
+      {/* 2. Net worth hero */}
+      <section className="hero-surface fade-in overflow-hidden rounded-[var(--radius-card)] p-5 sm:p-7">
+        <div className="text-[12.5px] text-hero-muted">Net worth</div>
+        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+          <div className="min-w-0">
+            <CountUpMoney value={pf.netWorth} className="block truncate text-[40px] font-semibold leading-[44px] tracking-tight" />
+            <div className="mt-3"><DeltaChip value={thisMonth.savings} suffix=" this month" onDark /></div>
+          </div>
+          <div className="h-14 w-28 sm:w-40" aria-hidden>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={spark} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
+                <defs><linearGradient id="spark" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--income)" stopOpacity={0.45} /><stop offset="100%" stopColor="var(--income)" stopOpacity={0} /></linearGradient></defs>
+                <YAxis hide domain={["dataMin", "dataMax"]} />
+                <Area dataKey="v" stroke="var(--income)" strokeWidth={2} fill="url(#spark)" isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-3 gap-3 border-t border-hero-foreground/10 pt-4">
+          {([["Cash & bank", pf.cash], ["Total assets", pf.totalAssets], ["Total liabilities", pf.totalLiabilities]] as const).map(([label, v]) => (
+            <div key={label} className="min-w-0"><div className="truncate text-[12px] text-hero-muted">{label}</div><MoneyText value={v} compact tone="plain" className="mt-0.5 block text-[15px] font-semibold sm:text-[17px]" /></div>
+          ))}
+        </div>
+      </section>
+
+      {/* 3. This month / FY */}
+      <SectionCard title={scope === "month" ? monthLabel(monthKey(today)) : fyLabel(fy)} action={<SegmentedTabs size="sm" label="Period" value={scope} onChange={setScope} options={[{ value: "month", label: "This month" }, { value: "fy", label: "This FY" }]} />}>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="min-w-0"><div className="text-[12.5px] text-muted-foreground">Income</div><MoneyText value={period.income} compact tone="income" className="mt-0.5 block text-[17px] font-semibold" /></div>
+          <div className="min-w-0"><div className="text-[12.5px] text-muted-foreground">Expenses</div><MoneyText value={period.expense} compact tone="expense" className="mt-0.5 block text-[17px] font-semibold" /></div>
+          <div className="min-w-0"><div className="text-[12.5px] text-muted-foreground">Savings</div><MoneyText value={period.savings} compact className="mt-0.5 block text-[17px] font-semibold" /></div>
+        </div>
+        <div className="mt-5">
+          <div className="mb-1.5 flex justify-between text-[12.5px]"><span className="text-muted-foreground">Savings rate</span><span className="num font-medium">{period.savingsRate.toFixed(1)}%</span></div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted"><div className={cn("h-full rounded-full transition-[width] duration-200 ease-out", period.savingsRate >= 0 ? "bg-primary" : "bg-expense")} style={{ width: `${Math.min(100, Math.max(0, Math.abs(period.savingsRate)))}%` }} /></div>
+        </div>
+      </SectionCard>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* 4. Cash flow */}
+        <ChartCard title="Cash flow" summary={<span><span className="text-income">●</span> Income &nbsp;<span className="text-expense">●</span> Expenses</span>}
+          action={<SegmentedTabs size="sm" label="Range" value={range} onChange={setRange} options={[{ value: "L:6", label: "6M" }, { value: "L:12", label: "12M" }, { value: "FY", label: "FY" }]} />}>
+          <BarChart data={flow} barGap={3} margin={{ left: -8, right: 0, top: 4 }}>
+            <CartesianGrid {...chartGrid} />
+            <XAxis dataKey="month" {...chartAxis} />
+            <YAxis {...chartAxis} tickFormatter={chartMoney} width={48} />
+            <Tooltip {...chartTip} trigger="click" />
+            <Bar dataKey="Income" fill="var(--income)" radius={[4, 4, 4, 4]} maxBarSize={10} />
+            <Bar dataKey="Expense" name="Expenses" fill="var(--expense)" radius={[4, 4, 4, 4]} maxBarSize={10} />
+          </BarChart>
+        </ChartCard>
+
+        {/* 5. Spending by category */}
+        <SectionCard title="Spending by category" action={<span className="text-[12.5px] text-muted-foreground">{scope === "month" ? "This month" : fyLabel(fy)}</span>}>
+          {cats.length === 0 ? <p className="py-6 text-center text-[13px] text-muted-foreground">No spending recorded for this period.</p> : (
+            <>
+              <div className="relative mx-auto h-44 w-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart><Pie data={cats} dataKey="value" nameKey="name" innerRadius="68%" outerRadius="100%" paddingAngle={2} cornerRadius={4} stroke="none">{cats.map((c) => <Cell key={c.name} fill={colors[c.name]} />)}</Pie><Tooltip {...chartTip} trigger="click" /></PieChart>
+                </ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center"><div><div className="text-[12px] text-muted-foreground">Total</div><div className="num text-[17px] font-semibold">{money(catTotal, true)}</div></div></div>
+              </div>
+              <ol className="mt-4 space-y-3">
+                {cats.map((c) => { const pct = catTotal ? (c.value / catTotal) * 100 : 0; return (
+                  <li key={c.name}>
+                    <div className="mb-1 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 text-[14px]">
+                      <span className="flex min-w-0 items-center gap-2"><span className="size-2.5 shrink-0 rounded-full" style={{ background: colors[c.name] }} /><span className="truncate">{c.name}</span></span>
+                      <span className="num text-[12.5px] text-muted-foreground">{pct.toFixed(0)}%</span>
+                      <MoneyText value={c.value} tone="plain" className="font-medium" />
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: colors[c.name] }} /></div>
+                  </li>); })}
+              </ol>
+            </>
+          )}
+        </SectionCard>
       </div>
+
+      {/* 6. Debt & lending */}
+      <SectionCard title="Debt & lending" action={<CardLink to="/loans">View loans</CardLink>}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard label="Outstanding borrowings" value={pf.borrowOut + pf.emiOut} hint={`Private ${money(pf.borrowOut, true)} · EMI ${money(pf.emiOut, true)}`} tone="plain" />
+          <StatCard label="Monthly obligations" value={pf.monthlyObligations} hint="EMI + interest due" tone="plain" />
+          <StatCard label="Principal lent out" value={pf.lentOut} hint={`${pf.lendings.filter((x) => x.s.outstanding > 0).length} active borrowers`} tone="plain" />
+        </div>
+      </SectionCard>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* 7. Upcoming */}
+        <SectionCard title="Upcoming in 30 days" action={dues.length > 3 ? <CardLink to="/statements" search={{ tab: "commitments" }}>See all</CardLink> : undefined}>
+          {dues.length === 0 ? <p className="text-[13px] text-muted-foreground">Nothing due in the next 30 days.</p> : (
+            <div className="-my-3 divide-y">
+              {dues.slice(0, 3).map((r) => <ListRow key={r.id} icon={r.kind === "EMI" ? <Landmark className="size-5" /> : r.kind.includes("interest") ? <CalendarClock className="size-5" /> : <Receipt className="size-5" />} title={r.name} subtitle={`${relDate(r.date, today)} · ${r.kind}`} trailing={<MoneyText value={r.amount} tone="plain" />} />)}
+            </div>
+          )}
+        </SectionCard>
+
+        {/* 8. Needs attention */}
+        <SectionCard title="Needs attention">
+          {attention.length === 0 ? (
+            <p className="flex items-center gap-2 text-[14px] text-muted-foreground"><CheckCircle2 className="size-5 text-income" /> All clear. Nothing overdue or waiting.</p>
+          ) : (
+            <div className="-my-3 divide-y">
+              {attention.map((a) => <Link key={a.key} to={a.to as "/"} className="block"><ListRow icon={a.icon} title={a.title} subtitle={a.sub} trailing={a.amount !== undefined ? <MoneyText value={a.amount} tone="expense" /> : <ChevronRight className="size-4 text-muted-foreground" />} /></Link>)}
+            </div>
+          )}
+        </SectionCard>
       </div>
+
+      {/* 9. Health */}
+      <Link to="/statements" search={{ tab: "insights" } as never} className="pressable block">
+        <SectionCard>
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4">
+            <ScoreRing score={d.score} />
+            <div className="min-w-0"><h2 className="text-[17px] font-semibold">Financial health</h2><p className="mt-0.5 text-[13px] text-muted-foreground">{healthy} of {d.health.length} indicators healthy{weakest ? ` · watch ${weakest.name.toLowerCase()}` : ""}</p></div>
+            <ChevronRight className="size-5 text-muted-foreground" />
+          </div>
+        </SectionCard>
+      </Link>
     </div>
   );
 }
 
-function Chart({ title, children }: { title: string; children: React.ReactElement }) {
+function ScoreRing({ score }: { score: number }) {
+  const r = 26, c = 2 * Math.PI * r;
+  const tone = score >= 70 ? "var(--income)" : score >= 40 ? "var(--warning)" : "var(--expense)";
   return (
-    <Panel className="chart-panel"><div className="mb-5 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2"><div className="min-w-0"><h2 className="text-sm font-semibold">{title}</h2><p className="mt-1 text-[10px] text-muted-foreground">{title.includes("outstanding") ? "Current principal balance" : title.includes("progress") ? "Principal repaid · %" : "Indian rupees · ₹"}</p></div><Activity className="size-4 text-muted-foreground" /></div>
-      <div className="h-60 min-w-0 sm:h-64"><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></div>
-    </Panel>
+    <div className="relative size-16 shrink-0">
+      <svg viewBox="0 0 64 64" className="size-16 -rotate-90"><circle cx="32" cy="32" r={r} fill="none" stroke="var(--muted)" strokeWidth="6" /><circle cx="32" cy="32" r={r} fill="none" stroke={tone} strokeWidth="6" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} /></svg>
+      <span className="num absolute inset-0 grid place-items-center text-[17px] font-semibold">{score}</span>
+    </div>
   );
-}
-
-const CHART_NAMES = ["Income & expense", "Savings", "Categories", "Lenders", "Borrowers", "Interest", "EMI outlook", "Cash flow", "Assets & liabilities", "Debt progress"];
-function chartMoney(v: number) { const a = Math.abs(v); const sign = v < 0 ? "−" : ""; return `${sign}₹${a >= 1e7 ? `${+(a / 1e7).toFixed(1)}Cr` : a >= 1e5 ? `${+(a / 1e5).toFixed(1)}L` : a >= 1e3 ? `${+(a / 1e3).toFixed(1)}k` : Math.round(a)}`; }
-function Metric({ label, value, hint, index }: { label: string; value: string; hint?: string; index: number; tone?: string }) {
-  const Icon = [0, 2, 7].includes(index) ? ArrowDownLeft : [1, 6, 13].includes(index) ? ArrowUpRight : [4, 9].includes(index) ? Landmark : [5, 15].includes(index) ? HandCoins : TrendingUp;
-  const tone = [0, 2, 7].includes(index) ? "metric-good" : [1, 6, 13].includes(index) ? "metric-bad" : [8, 9, 14].includes(index) ? "metric-warn" : [5, 15].includes(index) ? "metric-info" : "metric-neutral";
-  return <div className={cn("panel metric min-w-0 p-3.5 sm:p-4", tone)}><div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2"><div className="text-[11px] font-medium text-muted-foreground">{label}</div><Icon className="metric-icon size-4 shrink-0" /></div><div className="num whitespace-nowrap text-lg font-semibold sm:text-xl">{value}</div>{hint && <div title={hint} className="mt-1 truncate text-[10px] text-muted-foreground">{hint}</div>}</div>;
 }

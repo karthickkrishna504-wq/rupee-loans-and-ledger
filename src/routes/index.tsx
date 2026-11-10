@@ -100,12 +100,10 @@ function Home() {
       {/* 2. Net worth hero */}
       <section className="hero-surface fade-in overflow-hidden rounded-[var(--radius-card)] p-5 sm:p-7">
         <div className="text-[12.5px] text-hero-muted">Net worth</div>
-        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
-          <div className="min-w-0">
-            <CountUpMoney value={pf.netWorth} className="block truncate text-[40px] font-semibold leading-[44px] tracking-tight" />
-            <div className="mt-3"><DeltaChip value={thisMonth.savings} suffix=" this month" onDark /></div>
-          </div>
-          <div className="h-14 w-28 sm:w-40" aria-hidden>
+        <CountUpMoney value={pf.netWorth} className="mt-1 block truncate text-[40px] font-semibold leading-[44px] tracking-tight" />
+        <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4">
+          <DeltaChip value={thisMonth.savings} suffix=" this month" onDark />
+          <div className="h-10 w-full max-w-48 justify-self-end" aria-hidden>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={spark} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
                 <defs><linearGradient id="spark" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--income)" stopOpacity={0.45} /><stop offset="100%" stopColor="var(--income)" stopOpacity={0} /></linearGradient></defs>

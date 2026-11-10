@@ -68,6 +68,6 @@ export function categoryColorMap(db: DB, names: string[]) {
     used.add(i);
     map[n] = `var(--cat-${i + 1})`;
   }
-  map.Other = "var(--cat-8)";
+  map["Other"] = "var(--cat-8)";
   return map;
 }

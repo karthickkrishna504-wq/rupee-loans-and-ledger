@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useDB, removeItem } from "@/lib/store";
 import { filterByPeriod, summarize } from "@/lib/accountingEngine";
 import { fmtDate, fyLabel, fyStart, inr, monthKey, monthLabel } from "@/lib/format";
 import { TX_TYPES, type Transaction } from "@/lib/types";
-import { Badge, Input, PageHeader, Select, Stat, Table } from "@/components/fin/ui";
+import { Input, PageHeader, Select, Stat, Table } from "@/components/fin/ui";
 import { Button } from "@/components/ui/button";
 import { TransactionDialog } from "@/components/fin/TransactionDialog";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/transactions")({
   head: () => ({
@@ -72,11 +73,14 @@ function Register() {
 
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
         {QUICK.map((x) => (
-          <button key={x.k} onClick={() => setQuick(x.k)} className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${quick === x.k ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground"}`}>{x.l}</button>
+          <button key={x.k} onClick={() => setQuick(x.k)} className={cn("shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors duration-150", quick === x.k ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground")}>{x.l}</button>
         ))}
       </div>
       <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <Input placeholder="Search description, person, UTR…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Search description, person, UTR…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
         <Select value={type} onChange={(e) => setType(e.target.value)}><option value="">All types</option>{TX_TYPES.map((t) => <option key={t.type}>{t.type}</option>)}</Select>
         <Select value={acc} onChange={(e) => setAcc(e.target.value)}><option value="">All accounts</option>{db.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>
         <Select value={period} onChange={(e) => setPeriod(e.target.value)}>
@@ -86,41 +90,40 @@ function Register() {
         </Select>
       </div>
 
-      <Table empty={!rows.length} head={["", "ID", "Date", "Month", "FY", "Type", "Dir", "Amount", "Category", "Sub-category", "Description", "Account", "To account", "Method", "Person", "Loan / EMI", "EMI split (I / P)", "Essential?", "Need/Want", "Recurring?", "Pers/Biz", "Fixed/Var", "Reference", "Source", "Notes"]}>
-        {rows.map((t) => (
-          <tr key={t.id}>
+      <Table empty={!rows.length} head={["", "Date", "Description", "Amount", "Type", "Category", "Sub-category", "Account", "To account", "Method", "Person", "Loan / EMI", "EMI split (I / P)", "Essential?", "Need/Want", "Recurring?", "Pers/Biz", "Fixed/Var", "Reference", "Source", "Notes"]}>
+        {rows.map((t) => {
+          const dirIcon = t.direction === "IN" ? <ArrowDownLeft className="size-3.5 text-success" /> : t.direction === "OUT" ? <ArrowUpRight className="size-3.5 text-destructive" /> : <ArrowLeftRight className="size-3.5 text-info" />;
+          return (
+          <tr key={t.id} className="group">
             <td>
-              <div className="flex gap-1">
+              <div className="flex gap-1 opacity-60 transition-opacity duration-150 group-hover:opacity-100">
                 <button aria-label="Edit" className="rounded p-1 text-muted-foreground hover:text-foreground" onClick={() => { setEdit(t); setOpen(true); }}><Pencil className="size-3.5" /></button>
                 <button aria-label="Delete" className="rounded p-1 text-muted-foreground hover:text-destructive" onClick={() => confirm("Delete this transaction?") && removeItem("transactions", t.id)}><Trash2 className="size-3.5" /></button>
               </div>
             </td>
-            <td className="num text-xs text-muted-foreground">{t.id}</td>
-            <td className="num">{fmtDate(t.date)}</td>
-            <td>{t.month}</td>
-            <td className="text-xs">{t.financialYear}</td>
-            <td className="font-medium">{t.type}</td>
-            <td><Badge>{t.direction}</Badge></td>
-            <td className={`num text-right font-semibold ${t.direction === "IN" ? "text-success" : t.direction === "OUT" ? "text-destructive" : "text-info"}`}>{t.direction === "OUT" ? "−" : t.direction === "IN" ? "+" : "⇄ "}{inr(t.amount)}</td>
+            <td className="num whitespace-nowrap">{fmtDate(t.date)}</td>
+            <td className="max-w-64 truncate font-medium">{t.description || <span className="text-muted-foreground">—</span>}</td>
+            <td className={cn("num text-right font-semibold whitespace-nowrap", t.direction === "IN" ? "text-success" : t.direction === "OUT" ? "text-destructive" : "text-info")}>{dirIcon} {t.direction === "OUT" ? "−" : t.direction === "IN" ? "+" : ""}{inr(t.amount)}</td>
+            <td className="whitespace-nowrap">{t.type}</td>
             <td>{t.mainCategory || "—"}</td>
             <td>{t.subCategory || "—"}</td>
-            <td className="max-w-64 truncate">{t.description}</td>
             <td>{name(t.accountId)}</td>
             <td>{t.toAccountId ? name(t.toAccountId) : "—"}</td>
             <td>{t.paymentMethod}</td>
             <td>{t.relatedPerson || "—"}</td>
-            <td className="num text-xs">{t.relatedBorrowingId || t.relatedLendingId || t.relatedEmiId || t.relatedAssetId || "—"}</td>
+            <td className="num text-xs text-muted-foreground">{t.relatedBorrowingId || t.relatedLendingId || t.relatedEmiId || t.relatedAssetId || "—"}</td>
             <td className="num text-xs">{t.type === "EMI Payment" ? `${inr(t.interestComponent ?? 0)} / ${inr(t.principalComponent ?? 0)}` : "—"}</td>
             <td>{t.essentialOrDiscretionary ?? "—"}</td>
             <td>{t.needOrWant ?? "—"}</td>
             <td>{t.recurringOrOneTime ?? "—"}</td>
             <td>{t.personalOrBusiness ?? "—"}</td>
             <td>{t.fixedOrVariable ?? "—"}</td>
-            <td className="num text-xs">{t.referenceNumber || "—"}</td>
-            <td className="text-xs">{t.source}</td>
+            <td className="num text-xs text-muted-foreground">{t.referenceNumber || "—"}</td>
+            <td className="text-xs text-muted-foreground">{t.source}</td>
             <td className="max-w-48 truncate text-xs text-muted-foreground">{t.notes || ""}</td>
           </tr>
-        ))}
+          );
+        })}
       </Table>
       <TransactionDialog open={open} onOpenChange={setOpen} initial={edit} />
     </div>

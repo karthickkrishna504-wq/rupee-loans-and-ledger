@@ -11,10 +11,10 @@ export const NAV = [
   { to: "/", label: "Home", icon: Home },
   { to: "/transactions", label: "Transactions", icon: ListOrdered },
   { to: "/accounts", label: "Accounts", icon: Landmark },
-  { to: "/planning", label: "Plan", icon: Target },
+  { to: "/loans", label: "Lending & Borrowing", icon: HandCoins },
   { to: "/statements", label: "Reports", icon: FileChartColumn },
 ] as const;
-const FAB_ROUTES = ["/", "/transactions", "/accounts"];
+const FAB_ROUTES = ["/", "/transactions", "/accounts", "/loans"];
 
 const ProfileCtx = createContext<{ name: string; setName: (n: string) => void; openAdd: () => void }>({ name: "", setName: () => {}, openAdd: () => {} });
 export const useProfile = () => useContext(ProfileCtx);
@@ -41,7 +41,7 @@ function AvatarMenu({ name, dark, onTheme, onName }: { name: string; dark: boole
         <DropdownMenuLabel className="text-[13px]">{name || "Your profile"}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={onName}><UserRound /> {name ? "Edit name" : "Set your name"}</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild><Link to="/loans"><HandCoins /> Loans & lending</Link></DropdownMenuItem>
+        <DropdownMenuItem asChild><Link to="/planning"><Target /> Plan & budgets</Link></DropdownMenuItem>
         <DropdownMenuItem asChild><Link to="/bank-sync"><Inbox /> Bank Sync & import</Link></DropdownMenuItem>
         <DropdownMenuItem asChild><Link to="/settings"><Settings /> Settings & backup</Link></DropdownMenuItem>
         <DropdownMenuSeparator />

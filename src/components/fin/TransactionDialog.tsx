@@ -3,12 +3,13 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "./ui";
-import { useDB, saveTx, uid } from "@/lib/store";
+import { useDB, saveTx, uid, upsert, setDB } from "@/lib/store";
 import { TX_TYPES, txMeta, type Transaction, type TxType } from "@/lib/types";
+import { methodsForAccount, loanInterestDescription, periodForInterestDate } from "@/lib/txHelpers";
 import { emiSchedule, loanSummary } from "@/lib/accountingEngine";
 import { inr, todayISO } from "@/lib/format";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles, LoaderCircle } from "lucide-react";
+import { Sparkles, LoaderCircle, UserRound } from "lucide-react";
 import { suggestTransaction } from "@/lib/suggestions.functions";
 import type { TransactionSuggestion } from "@/lib/transactionSuggestion";
 
@@ -26,6 +27,10 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
   const [suggestion, setSuggestion] = useState<TransactionSuggestion | null>(null);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestionError, setSuggestionError] = useState("");
+  const [newPerson, setNewPerson] = useState("");
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeFrom, setMergeFrom] = useState("");
+  const [mergeInto, setMergeInto] = useState("");
   useEffect(() => { if (open) { setSuggestion(null); setSuggestionError(""); } }, [open]);
   async function getSuggestion() {
     setSuggesting(true); setSuggestion(null); setSuggestionError("");
@@ -47,11 +52,28 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
   const meta = txMeta(d.type);
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
   const isExpense = meta.nature === "EXPENSE" || meta.nature === "REFUND";
+  const isTransfer = meta.dir === "TRANSFER";
   const cats = isExpense ? Object.keys(db.config.expenseCategories) : meta.nature === "INCOME" ? db.config.incomeCategories : [];
   const subs = isExpense && d.mainCategory ? db.config.expenseCategories[d.mainCategory] ?? [] : [];
+  const account = db.accounts.find((a) => a.id === d.accountId);
+  const methods = methodsForAccount(account);
+  const people = db.config.people;
+  const isLoanInterest = d.type === "Interest Paid on Borrowing" || d.type === "Interest Received from Money Lent";
+  const linkedLoan = useMemo(() => [...db.borrowings, ...db.lendings].find((l) => l.loanId === (d.relatedBorrowingId ?? d.relatedLendingId)),
+    [db.borrowings, db.lendings, d.relatedBorrowingId, d.relatedLendingId]);
+
+  // Account change may invalidate the chosen method.
+  useEffect(() => { if (d.paymentMethod && methods.length && !methods.includes(d.paymentMethod)) set({ paymentMethod: methods[0] }); }, [methods, d.paymentMethod]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Loan-linked interest entries pick up the shared description template.
+  useEffect(() => {
+    if (isLoanInterest && linkedLoan && !d.id) {
+      const period = periodForInterestDate(linkedLoan, db.transactions, d.date ?? today);
+      set({ description: loanInterestDescription(linkedLoan, period), loanPeriod: period });
+    }
+  }, [isLoanInterest, linkedLoan, d.id, d.date, db.transactions, d.description]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loanList = useMemo(() => {
-    if (meta.link === "lending") return db.lendings.map((l) => ({ id: l.loanId, kind: "lending" as const, label: `${l.loanId} · ${l.counterparty}`, person: l.counterparty }));
     const b = db.borrowings.map((l) => ({ id: l.loanId, kind: "borrowing" as const, label: `${l.loanId} · ${l.counterparty}`, person: l.counterparty }));
     const e = db.emiLoans.map((l) => ({ id: l.loanId, kind: "emi" as const, label: `${l.loanId} · ${l.lender} (${l.loanType} EMI)`, person: l.lender }));
     if (meta.link === "borrowing") return b;
@@ -61,17 +83,16 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
   }, [meta.link, db]);
   const selectedLoan = d.relatedBorrowingId ?? d.relatedLendingId ?? d.relatedEmiId ?? "";
 
-  // Contextual hint & expected amount for linked loans
   const context = useMemo(() => {
     const pl = [...db.borrowings, ...db.lendings].find((l) => l.loanId === selectedLoan);
     if (pl) {
       const s = loanSummary(pl, db.transactions.filter((t) => t.id !== d.id), today);
-      return { outstanding: s.outstanding, interestDue: s.unpaidInterest, nextDue: s.nextDue };
+      return { outstanding: s.outstanding, interestDue: s.unpaidInterest, next: undefined as { n: number; emi: number } | undefined };
     }
     const el = db.emiLoans.find((l) => l.loanId === selectedLoan);
     if (el) {
       const s = emiSchedule(el, db.transactions.filter((t) => t.id !== d.id));
-      return { outstanding: s.outstanding, next: s.next };
+      return { outstanding: s.outstanding, interestDue: undefined as number | undefined, next: s.next };
     }
     return null;
   }, [selectedLoan, db, d.id, today]);
@@ -86,8 +107,10 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
     const pl = [...db.borrowings, ...db.lendings].find((l) => l.loanId === id);
     if (pl && d.type.startsWith("Interest")) {
       const s = loanSummary(pl, db.transactions, today);
+      const period = periodForInterestDate(pl, db.transactions, d.date ?? today);
       p.amount = s.nextDue?.balancePayableOrReceivable ?? 0;
-      p.description = `Interest ${pl.counterparty} · period ${s.nextDue?.period ?? ""}`;
+      p.description = loanInterestDescription(pl, period);
+      p.loanPeriod = period;
     }
     const el = db.emiLoans.find((l) => l.loanId === id);
     if (el && d.type === "EMI Payment") {
@@ -97,6 +120,29 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
     p.mainCategory = d.type.includes("Interest") ? "Interest" : d.type === "EMI Payment" ? "EMI" : "Loans";
     set(p);
   }
+
+  const addPerson = () => {
+    const name = newPerson.trim();
+    if (!name) return;
+    if (!people.some((p) => p.toLowerCase() === name.toLowerCase())) upsertConfigPeople([...people, name]);
+    set({ relatedPerson: name });
+    setNewPerson("");
+  };
+  const upsertConfigPeople = (list: string[]) => setDB((db0) => ({ ...db0, config: { ...db0.config, people: list } }));
+  const mergePeople = () => {
+    if (!mergeFrom || !mergeInto || mergeFrom === mergeInto) return toast.error("Pick two different people");
+    setDB((db0) => ({
+      ...db0,
+      transactions: db0.transactions.map((t) => (t.relatedPerson === mergeFrom ? { ...t, relatedPerson: mergeInto } : t)),
+      borrowings: db0.borrowings.map((l) => (l.counterparty === mergeFrom ? { ...l, counterparty: mergeInto } : l)),
+      lendings: db0.lendings.map((l) => (l.counterparty === mergeFrom ? { ...l, counterparty: mergeInto } : l)),
+      emiLoans: db0.emiLoans.map((l) => (l.lender === mergeFrom ? { ...l, lender: mergeInto } : l)),
+      config: { ...db0.config, people: db0.config.people.filter((p) => p !== mergeFrom) },
+    }));
+    set({ relatedPerson: d.relatedPerson === mergeFrom ? mergeInto : d.relatedPerson });
+    setMergeOpen(false); setMergeFrom(""); setMergeInto("");
+    toast.success(`Merged into ${mergeInto}`);
+  };
 
   function save() {
     const amt = Number(d.amount);
@@ -114,6 +160,7 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
       interestComponent: d.type === "EMI Payment" ? Number(d.interestComponent) : undefined,
       principalComponent: d.type === "EMI Payment" ? Number(d.principalComponent) : undefined,
       toAccountId: meta.dir === "TRANSFER" ? d.toAccountId : undefined,
+      source: isLoanInterest && !d.id ? "Loan schedule" : d.source ?? "Manual",
     } as Transaction;
     saveTx(tx);
     toast.success(selectedLoan ? `Saved · ledger for ${selectedLoan} and account balance updated` : "Transaction saved");
@@ -168,13 +215,13 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
             </>
           )}
 
-          <Field label={meta.dir === "TRANSFER" ? "From account" : "Account"}>
+          <Field label={isTransfer ? "From account" : "Account"}>
             <Select value={d.accountId} onChange={(e) => set({ accountId: e.target.value })}>
               <option value="">Select…</option>
               {db.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </Select>
           </Field>
-          {meta.dir === "TRANSFER" ? (
+          {isTransfer ? (
             <Field label="To account">
               <Select value={d.toAccountId ?? ""} onChange={(e) => set({ toAccountId: e.target.value })}>
                 <option value="">Select…</option>
@@ -184,7 +231,7 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
           ) : (
             <Field label="Payment method">
               <Select value={d.paymentMethod} onChange={(e) => set({ paymentMethod: e.target.value })}>
-                {db.config.paymentMethods.map((m) => <option key={m}>{m}</option>)}
+                {(methods.length ? methods : db.config.paymentMethods).map((m) => <option key={m}>{m}</option>)}
               </Select>
             </Field>
           )}
@@ -204,10 +251,20 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
             </>
           )}
 
-          <Field label="Related person"><Input value={d.relatedPerson ?? ""} onChange={(e) => set({ relatedPerson: e.target.value })} /></Field>
+          {!isTransfer && (
+            <Field label="Related person">
+              <div className="flex gap-2">
+                <Select value={people.includes(d.relatedPerson ?? "") ? d.relatedPerson : ""} onChange={(e) => set({ relatedPerson: e.target.value || undefined })}>
+                  <option value="">—</option>{people.map((p) => <option key={p}>{p}</option>)}
+                </Select>
+                <Input value={newPerson} placeholder="Add new" onChange={(e) => setNewPerson(e.target.value)} onBlur={addPerson} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPerson(); } }} />
+              </div>
+              <button type="button" onClick={() => setMergeOpen(true)} className="mt-1 text-left text-[11px] text-muted-foreground underline underline-offset-2">Merge duplicate people…</button>
+            </Field>
+          )}
           <Field label="Reference (UTR / receipt)"><Input value={d.referenceNumber ?? ""} onChange={(e) => set({ referenceNumber: e.target.value })} /></Field>
 
-          {meta.nature === "EXPENSE" && (
+          {isExpense && (
             <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-5">
               {([
                 ["essentialOrDiscretionary", ["Essential", "Discretionary"]],
@@ -230,6 +287,16 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={save}>Save transaction</Button>
         </div>
+
+        <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><UserRound className="size-4" /> Merge duplicate people</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">All transactions and loans will move to the person you keep.</p>
+            <Field label="Merge from"><Select value={mergeFrom} onChange={(e) => setMergeFrom(e.target.value)}><option value="">Select…</option>{people.map((p) => <option key={p}>{p}</option>)}</Select></Field>
+            <Field label="Keep"><Select value={mergeInto} onChange={(e) => setMergeInto(e.target.value)}><option value="">Select…</option>{people.filter((p) => p !== mergeFrom).map((p) => <option key={p}>{p}</option>)}</Select></Field>
+            <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setMergeOpen(false)}>Cancel</Button><Button onClick={mergePeople}>Merge</Button></div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

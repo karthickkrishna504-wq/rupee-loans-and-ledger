@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { getDB, saveTx, uid, useDB } from "@/lib/store";
 import { interestCalendar, loanSummary, principalMovements, settlementQuote, type RiskLevel } from "@/lib/accountingEngine";
+import { loanInterestDescription } from "@/lib/txHelpers";
 import { fmtDate, inr, todayISO } from "@/lib/format";
 import type { PrivateLoan, Transaction, TxType } from "@/lib/types";
 import { Badge, Field, Input, Panel, Select, Table } from "@/components/fin/ui";
@@ -21,12 +22,14 @@ const STATUS_TONE: Record<string, "good" | "warn" | "bad" | "muted" | "info"> = 
 };
 
 /** Records a loan-linked transaction through saveTx so it hits the register and the account balance. */
-export function recordLoanTx(loan: PrivateLoan, type: TxType, amount: number, date: string, accountId: string, description: string, reference?: string) {
+export function recordLoanTx(loan: PrivateLoan, type: TxType, amount: number, date: string, accountId: string, period?: number, reference?: string) {
   const link = loan.kind === "BORROWED" ? { relatedBorrowingId: loan.loanId } : { relatedLendingId: loan.loanId };
   saveTx({
     id: uid("TX"), date, type, amount, accountId, relatedPerson: loan.counterparty, ...link,
-    mainCategory: type.startsWith("Interest") ? "Interest" : "Loans", subCategory: "", description,
-    paymentMethod: "NEFT", referenceNumber: reference || undefined, source: "Manual",
+    mainCategory: type.startsWith("Interest") ? "Interest" : "Loans", subCategory: "",
+    description: type.startsWith("Interest") ? loanInterestDescription(loan, period ?? 0) : `${type} · ${loan.counterparty}`,
+    paymentMethod: "NEFT", referenceNumber: reference || undefined, source: type.startsWith("Interest") ? "Loan schedule" : "Manual",
+    loanPeriod: type.startsWith("Interest") ? period : undefined,
   } as Transaction);
 }
 
@@ -44,8 +47,7 @@ export function SettleDialog({ loan, open, onOpenChange }: { loan: PrivateLoan; 
     if (!(amt > 0)) return toast.error("Enter an amount");
     if (amt > s.outstanding + 0.5) return toast.error(`Cannot exceed outstanding ${inr(s.outstanding)}`);
     if (!account) return toast.error("Choose an account");
-    recordLoanTx(loan, B ? "Principal Repayment on Borrowing" : "Principal Received from Borrower", amt, date, account,
-      `${after <= 0 ? "Full settlement" : "Partial principal"} · ${loan.counterparty}`, ref);
+    recordLoanTx(loan, B ? "Principal Repayment on Borrowing" : "Principal Received from Borrower", amt, date, account, undefined, ref);
     toast.success(after <= 0 ? "Loan settled and closed" : `Outstanding now ${inr(after)}`);
     setAmount(""); onOpenChange(false);
   };
@@ -119,7 +121,7 @@ export function InterestCalendarView({ kind }: { kind: "BORROWED" | "LENT" }) {
     // FIFO allocation means earlier unpaid periods are cleared first.
     const earlier = interestCalendar([r.loan], getDB().transactions, today, 12).filter((x) => x.dueDate < r.dueDate && x.balancePayableOrReceivable > 0.005);
     if (earlier.length) toast.message("Payment is applied to the oldest unpaid period first");
-    recordLoanTx(r.loan, B ? "Interest Paid on Borrowing" : "Interest Received from Money Lent", amt, today, account, `Interest P${r.period} · ${r.loan.counterparty}`);
+    recordLoanTx(r.loan, B ? "Interest Paid on Borrowing" : "Interest Received from Money Lent", amt, today, account, r.period);
     setAmounts((a) => { const n = { ...a }; delete n[key]; return n; });
     toast.success(B ? "Interest payment recorded" : "Interest collection recorded as income");
   };

@@ -72,7 +72,8 @@ export interface Transaction {
   fixedOrVariable?: "Fixed" | "Variable";
   referenceNumber?: string;
   notes?: string;
-  source: "Manual" | "Bank Import" | "Auto-Rule";
+  source: "Manual" | "Bank Import" | "Auto-Rule" | "Loan schedule";
+  loanPeriod?: number; // interest period number for loan-schedule entries
 }
 
 export type CalcMethod = "FIXED_MONTHLY_RATE" | "ANNUAL_DIV_12" | "DAILY_ACTUAL" | "MANUAL_AMOUNT";

@@ -30,7 +30,20 @@ export function parseNarration(text: string) {
   if (/UPI/i.test(text)) merchant=tokens.find((t,i)=>i>0 && !/^(DR|CR|UPI|HDFC|ICICI|SBI|AXIS|KOTAK|BANK)$/i.test(t) && !/^\d+$/.test(t) && !t.includes("@")) ?? upiId?.split("@")[0] ?? "";
   if (!merchant && /^(NEFT|IMPS|RTGS)/i.test(text)) merchant=text.replace(/^(NEFT|IMPS|RTGS)[/-](CR[/-]|DR[/-])?/i,"").split(/[/]/).filter(t=>!/^\d+$/.test(t)).join(" ").replace(/-INT$/i,"");
   if(!merchant)merchant=text.match(/(?:from|to|at)\s+([^.;]+?)(?=\s+(?:on|via|UPI|Ref|UTR|Avl)|[.;]|$)/i)?.[1] ?? text;
-  return { merchant:merchant.trim(), upiId, referenceNumber, paymentMethod: /NEFT/i.test(text)?"NEFT":/IMPS/i.test(text)?"IMPS":/RTGS/i.test(text)?"RTGS":/UPI/i.test(text)?"UPI":"Bank Transfer" };
+  // Clean display description: humanise the merchant, keep channel prefix.
+  const channel = /UPI/i.test(text)?"UPI":/NEFT/i.test(text)?"NEFT":/IMPS/i.test(text)?"IMPS":/RTGS/i.test(text)?"RTGS":undefined;
+  const rawMerchant = merchant.trim();
+  const cleaned = rawMerchant.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase()
+    .replace(/\b([a-z])/g, (c) => c.toUpperCase());
+  return { merchant: rawMerchant, description: channel ? `${cleaned} · ${channel}` : cleaned, upiId, referenceNumber,
+    paymentMethod: /NEFT/i.test(text)?"NEFT":/IMPS/i.test(text)?"IMPS":/RTGS/i.test(text)?"RTGS":/UPI/i.test(text)?"UPI":"Bank Transfer" };
+}
+
+/** Enforce a unique (account, reference) pair: later duplicates of an approved reference are rejected. */
+export function duplicateReferenceExists(db: DB, accountId: string, referenceNumber?: string) {
+  if (!referenceNumber) return false;
+  const ref = canonical(referenceNumber);
+  return db.transactions.some((t) => t.accountId === accountId && t.referenceNumber && canonical(t.referenceNumber) === ref);
 }
 export function bankFingerprint(r: {date:string; amount:number; direction:string; accountId:string; referenceNumber?:string; description:string}) {
   const text=[r.date,r.amount.toFixed(2),r.direction,r.accountId,canonical(r.referenceNumber || r.description)].join("|");
@@ -116,6 +129,7 @@ export function stagedTransaction(row:StagedBankRow,db:DB):Transaction {
   if(meta.dir==="TRANSFER" && (!d.toAccountId || d.toAccountId===row.accountId || !db.accounts.some(a=>a.id===d.toAccountId)))throw new Error("Choose a different destination account; approve the debit side only");
   if(meta.dir==="TRANSFER" && row.direction!=="OUT")throw new Error("Approve transfers using the debit side only");
   if(meta.link==="lending" && !db.lendings.some(l=>l.loanId===d.relatedLendingId))throw new Error("Select a lending loan");
+  if(duplicateReferenceExists(db,row.accountId,row.referenceNumber))throw new Error("A transaction with this reference already exists for this account");
   if(meta.link==="borrowing" && !db.borrowings.some(l=>l.loanId===d.relatedBorrowingId))throw new Error("Select a borrowing loan");
   if(meta.link==="borrowing_or_emi" && !db.borrowings.some(l=>l.loanId===d.relatedBorrowingId) && !db.emiLoans.some(l=>l.loanId===d.relatedEmiId))throw new Error("Select a borrowing or EMI loan");
   if(meta.link==="emi"){
@@ -130,7 +144,11 @@ export function stagedTransaction(row:StagedBankRow,db:DB):Transaction {
     if(row.amount>outstanding+0.01)throw new Error("Principal exceeds outstanding on bank date");
   }
   if((meta.nature==="EXPENSE" || meta.nature==="REFUND") && !d.mainCategory)throw new Error("Select an expense category");
-  return {...d,id:`IMP-${row.fingerprint}`,date:row.date,amount:row.amount,accountId:row.accountId,description:row.description,referenceNumber:row.referenceNumber,paymentMethod:row.paymentMethod,mainCategory:d.mainCategory??"",subCategory:d.subCategory??"",source:"Bank Import",direction:meta.dir,...deriveDateFields(row.date)} as Transaction;
+  const parsedDesc=parseNarration(row.description);
+  return {...d,id:`IMP-${row.fingerprint}`,date:row.date,amount:row.amount,accountId:row.accountId,
+    description: d.description || parsedDesc.description,referenceNumber:row.referenceNumber,
+    notes: row.description !== parsedDesc.description ? row.description : d.notes,
+    paymentMethod:row.paymentMethod,mainCategory:d.mainCategory??"",subCategory:d.subCategory??"",source:"Bank Import",direction:meta.dir,...deriveDateFields(row.date)} as Transaction;
 }
 export function approveBankRows(db:DB,ids:string[]) {
   let next=db;const errors:string[]=[];let approved=0;

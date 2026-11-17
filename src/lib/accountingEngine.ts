@@ -380,11 +380,12 @@ export function assetValues(db:DB) {
 }
 export function commitmentStatement(db:DB,today:string,days:number) {
   const end=addDays(today,days);
-  const rows:{id:string;name:string;kind:string;date:string;amount:number;overdue:boolean}[]=[];
-  for(const l of db.borrowings){for(const r of interestLedger(l,db.transactions,today,end)){if(r.dueDate<=end && r.balancePayableOrReceivable>0.005)rows.push({id:`${l.loanId}-${r.period}`,name:l.counterparty,kind:"Borrowing interest",date:r.dueDate,amount:r.balancePayableOrReceivable,overdue:r.dueDate<today});}}
-  for(const l of db.emiLoans){for(const r of emiSchedule(l,db.transactions).rows){if(!r.paid && r.dueDate<=end)rows.push({id:`${l.loanId}-${r.n}`,name:l.lender,kind:"EMI",date:r.dueDate,amount:r.emi,overdue:r.dueDate<today});}}
+  const rows:{id:string;name:string;kind:string;date:string;amount:number;overdue:boolean;direction:"IN"|"OUT"}[]=[];
+  for(const l of db.borrowings){for(const r of interestLedger(l,db.transactions,today,end)){if(r.dueDate<=end && r.balancePayableOrReceivable>0.005)rows.push({id:`${l.loanId}-${r.period}`,name:l.counterparty,kind:"Borrowing interest",date:r.dueDate,amount:r.balancePayableOrReceivable,overdue:r.dueDate<today,direction:"OUT"});}}
+  for(const l of db.lendings){for(const r of interestLedger(l,db.transactions,today,end)){if(r.dueDate<=end && r.balancePayableOrReceivable>0.005)rows.push({id:`${l.loanId}-${r.period}`,name:l.counterparty,kind:"Lending interest",date:r.dueDate,amount:r.balancePayableOrReceivable,overdue:r.dueDate<today,direction:"IN"});}}
+  for(const l of db.emiLoans){for(const r of emiSchedule(l,db.transactions).rows){if(!r.paid && r.dueDate<=end)rows.push({id:`${l.loanId}-${r.n}`,name:l.lender,kind:"EMI",date:r.dueDate,amount:r.emi,overdue:r.dueDate<today,direction:"OUT"});}}
   for(const o of db.obligations){for(let i=0;i<=Math.ceil(days/28);i++){const first=today.slice(0,8)+"01",month=addMonths(first,i);const {y,m}=parts(month);const date=toISO(y,m,Math.min(o.dueDay,daysInMonth(y,m)));if(date<today || date>end)continue;
     const paid=db.transactions.filter(t=>monthKey(t.date)===monthKey(date) && expenseOf(t)>0 && (o.accountId?o.accountId===t.accountId:true) && t.description.trim().toLowerCase()===o.name.trim().toLowerCase()).reduce((n,t)=>n+expenseOf(t),0);
-    const amount=Math.max(0,o.amount-paid);if(amount>0)rows.push({id:`${o.id}-${date}`,name:o.name,kind:o.category??"Recurring obligation",date,amount,overdue:false});}}
+    const amount=Math.max(0,o.amount-paid);if(amount>0)rows.push({id:`${o.id}-${date}`,name:o.name,kind:o.category??"Recurring obligation",date,amount,overdue:false,direction:"OUT"});}}
   return rows.sort((a,b)=>a.date.localeCompare(b.date));
 }

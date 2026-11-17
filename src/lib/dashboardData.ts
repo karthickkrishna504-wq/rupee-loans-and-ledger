@@ -51,7 +51,7 @@ export function computeDashboard(db: DB, period: string, today: string) {
 
 /** Net worth change this month = net cash/asset effect of this month's flows, from the engine's own summary. */
 export function upcomingDues(db: DB, today: string, days = 30) {
-  return commitmentStatement(db, today, days).filter((r) => !r.overdue);
+  return commitmentStatement(db, today, days);
 }
 
 export const fyPeriod = (today: string) => `FY:${fyStart(today)}`;

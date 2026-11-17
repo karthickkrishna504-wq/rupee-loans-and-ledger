@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Home, ListOrdered, Landmark, Target, FileChartColumn, Settings, Moon, Sun, Plus, Inbox, HandCoins, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Upload, UserRound } from "lucide-react";
+import { Home, ListOrdered, Landmark, Target, FileChartColumn, Settings, Moon, Sun, Plus, Inbox, HandCoins, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Upload, UserRound, Eye, EyeOff } from "lucide-react";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
@@ -10,13 +10,12 @@ import { cn } from "@/lib/utils";
 export const NAV = [
   { to: "/", label: "Home", icon: Home },
   { to: "/transactions", label: "Transactions", icon: ListOrdered },
-  { to: "/accounts", label: "Accounts", icon: Landmark },
-  { to: "/loans", label: "Lending & Borrowing", icon: HandCoins },
+  { to: "/loans", label: "Loans", icon: HandCoins },
   { to: "/statements", label: "Reports", icon: FileChartColumn },
 ] as const;
-const FAB_ROUTES = ["/", "/transactions", "/accounts", "/loans"];
 
-const ProfileCtx = createContext<{ name: string; setName: (n: string) => void; openAdd: () => void }>({ name: "", setName: () => {}, openAdd: () => {} });
+type ProfileContext = { name: string; setName: (n: string) => void; openAdd: () => void; balancesHidden: boolean; toggleBalances: () => void };
+const ProfileCtx = createContext<ProfileContext>({ name: "", setName: () => {}, openAdd: () => {}, balancesHidden: false, toggleBalances: () => {} });
 export const useProfile = () => useContext(ProfileCtx);
 
 export function Avatar({ name, className }: { name: string; className?: string }) {
@@ -33,7 +32,7 @@ function Brand() {
   );
 }
 
-function AvatarMenu({ name, dark, onTheme, onName }: { name: string; dark: boolean; onTheme: () => void; onName: () => void }) {
+function AvatarMenu({ name, dark, balancesHidden, onTheme, onName, onToggleBalances }: { name: string; dark: boolean; balancesHidden: boolean; onTheme: () => void; onName: () => void; onToggleBalances: () => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger aria-label="Open account menu" className="pressable rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"><Avatar name={name} /></DropdownMenuTrigger>
@@ -43,26 +42,36 @@ function AvatarMenu({ name, dark, onTheme, onName }: { name: string; dark: boole
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild><Link to="/planning"><Target /> Plan & budgets</Link></DropdownMenuItem>
         <DropdownMenuItem asChild><Link to="/bank-sync"><Inbox /> Bank Sync & import</Link></DropdownMenuItem>
+        <DropdownMenuItem asChild><Link to="/accounts"><Landmark /> Accounts</Link></DropdownMenuItem>
         <DropdownMenuItem asChild><Link to="/settings"><Settings /> Settings & backup</Link></DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onToggleBalances}>{balancesHidden ? <Eye /> : <EyeOff />} {balancesHidden ? "Show balances" : "Hide balances"}</DropdownMenuItem>
         <DropdownMenuItem onSelect={onTheme}>{dark ? <Sun /> : <Moon />} {dark ? "Light mode" : "Dark mode"}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function BottomNav({ path }: { path: string }) {
+function BottomNav({ path, onAdd }: { path: string; onAdd: () => void }) {
+  const renderLink = ({ to, label, icon: Icon }: (typeof NAV)[number]) => {
+    const active = path === to;
+    return (
+      <Link key={to} to={to} aria-current={active ? "page" : undefined} className={cn("pressable flex min-w-0 flex-col items-center gap-1 px-1 pb-2 pt-2 text-[11px] font-medium", active ? "text-primary" : "text-muted-foreground")}>
+        <span className={cn("grid h-7 w-12 place-items-center rounded-full transition-colors duration-200", active && "bg-accent")}><Icon className="size-5" /></span>
+        <span className="whitespace-nowrap">{label}</span>
+      </Link>
+    );
+  };
   return (
     <nav aria-label="Main" className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-card/95 backdrop-blur lg:hidden">
-      {NAV.map(({ to, label, icon: Icon }) => {
-        const active = path === to;
-        return (
-          <Link key={to} to={to} aria-current={active ? "page" : undefined} className={cn("pressable flex min-w-0 flex-col items-center gap-1 pb-2 pt-2 text-[11px] font-medium", active ? "text-primary" : "text-muted-foreground")}>
-            <span className={cn("grid h-7 w-12 place-items-center rounded-full transition-colors duration-200", active && "bg-accent")}><Icon className="size-5" /></span>
-            <span className="truncate">{label}</span>
-          </Link>
-        );
-      })}
+      {renderLink(NAV[0])}
+      {renderLink(NAV[1])}
+      <button type="button" onClick={onAdd} aria-label="Add transaction" className="pressable flex min-w-0 flex-col items-center gap-1 px-1 pb-2 pt-2 text-[11px] font-medium text-muted-foreground">
+        <span className="grid h-7 w-12 place-items-center rounded-full bg-primary text-primary-foreground"><Plus className="size-5" /></span>
+        <span className="whitespace-nowrap">Add</span>
+      </button>
+      {renderLink(NAV[2])}
+      {renderLink(NAV[3])}
     </nav>
   );
 }
@@ -111,9 +120,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(false);
   const [themeReady, setThemeReady] = useState(false);
   const [name, setNameState] = useState("");
+  const [balancesHidden, setBalancesHidden] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [entry, setEntry] = useState<Partial<Transaction> | null>(null);
-  useEffect(() => { setDark(localStorage.getItem("finledger-theme") === "dark"); setNameState(localStorage.getItem("kanakku-name") ?? ""); setThemeReady(true); }, []);
+  useEffect(() => {
+    setDark(localStorage.getItem("finledger-theme") === "dark");
+    setNameState(localStorage.getItem("kanakku-name") ?? "");
+    setBalancesHidden(localStorage.getItem("kanakku-hide-balances") === "true");
+    setThemeReady(true);
+  }, []);
   useEffect(() => {
     if (!themeReady) return;
     document.documentElement.classList.toggle("dark", dark);
@@ -121,6 +136,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [dark, themeReady]);
   const setName = (n: string) => { setNameState(n); localStorage.setItem("kanakku-name", n); };
   const askName = () => { const n = window.prompt("Your name", name); if (n !== null) setName(n.trim()); };
+  const toggleBalances = () => { setBalancesHidden((hidden) => { const next = !hidden; localStorage.setItem("kanakku-hide-balances", String(next)); return next; }); };
 
   const pick = (k: (typeof ADD_OPTIONS)[number]["key"]) => {
     setSheet(false);
@@ -128,27 +144,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (k === "import") return navigate({ to: "/bank-sync" });
     setEntry({ type: k === "expense" ? "Daily Expense" : k === "income" ? "Salary Income" : "Transfer Between Own Accounts" });
   };
-  const showFab = FAB_ROUTES.includes(path);
-
   return (
-    <ProfileCtx.Provider value={{ name, setName, openAdd: () => setSheet(true) }}>
+    <ProfileCtx.Provider value={{ name, setName, openAdd: () => setSheet(true), balancesHidden, toggleBalances }}>
       <div className="min-h-screen lg:flex">
         <Sidebar path={path} />
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-20 grid h-[60px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 bg-background/90 px-5 backdrop-blur lg:static lg:mx-auto lg:max-w-[1120px] lg:bg-transparent">
             <div className="lg:invisible"><Brand /></div>
-            <AvatarMenu name={name} dark={dark} onTheme={() => setDark(!dark)} onName={askName} />
+            <AvatarMenu name={name} dark={dark} balancesHidden={balancesHidden} onTheme={() => setDark(!dark)} onName={askName} onToggleBalances={toggleBalances} />
           </header>
-          <main className={cn("mx-auto w-full max-w-[1120px] px-5 pt-1 lg:px-8 lg:pb-12", showFab ? "pb-[calc(152px+env(safe-area-inset-bottom))]" : "pb-[calc(96px+env(safe-area-inset-bottom))]")}>{children}</main>
+          <main className="mx-auto w-full max-w-[1120px] px-5 pb-[calc(96px+env(safe-area-inset-bottom))] pt-1 lg:px-8 lg:pb-12">{children}</main>
         </div>
-        {showFab && (
-          <button onClick={() => setSheet(true)} aria-label="Add" className="pressable raised fixed right-5 z-30 grid size-14 place-items-center rounded-full bg-primary text-primary-foreground bottom-[calc(80px+env(safe-area-inset-bottom))] lg:bottom-8 lg:right-8">
-            <Plus className="size-6" />
-          </button>
-        )}
         <AddSheet open={sheet} onOpenChange={setSheet} onPick={pick} />
         <TransactionDialog open={entry !== null} onOpenChange={(o) => !o && setEntry(null)} initial={entry ?? undefined} />
-        <BottomNav path={path} />
+        <BottomNav path={path} onAdd={() => setSheet(true)} />
       </div>
     </ProfileCtx.Provider>
   );

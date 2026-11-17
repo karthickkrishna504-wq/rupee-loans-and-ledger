@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { Database, Download, Trash2, Upload, FileSpreadsheet, X, ShieldCheck, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -54,6 +54,9 @@ function Settings() {
   return (
     <div className="max-w-3xl space-y-4">
       <PageHeader title="Settings" subtitle="Everything is saved on this device automatically." />
+      <Panel title="Accounts">
+        <div className="flex items-center justify-between gap-4"><div><p className="font-medium">Bank accounts & cash</p><p className="mt-1 text-sm text-muted-foreground">Manage balances, opening amounts and reconciliation.</p></div><Link to="/accounts" className="pressable rounded-[var(--radius)] bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">Open accounts</Link></div>
+      </Panel>
       <Panel title="Validation test data">
         <p className="mb-3 text-sm text-muted-foreground">Loads ₹5,00,000 borrowed @ 2%/month, ₹2,00,000 lent @ 2%/month, a ₹6,00,000 personal EMI loan, salary, expenses and transfers for FY 2026-27.</p>
         <div className="flex flex-wrap gap-2">

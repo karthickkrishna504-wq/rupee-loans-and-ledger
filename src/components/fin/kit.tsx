@@ -9,18 +9,18 @@ import { cn } from "@/lib/utils";
 
 export { Skeleton };
 
-export function MoneyText({ value, compact, tone = "auto", className }: { value: number; compact?: boolean; tone?: "auto" | "plain" | "income" | "expense"; className?: string }) {
+export function MoneyText({ value, compact, hidden = false, tone = "auto", className }: { value: number; compact?: boolean; hidden?: boolean; tone?: "auto" | "plain" | "income" | "expense"; className?: string }) {
   const [full, setFull] = useState(false);
   const neg = value < 0;
   const cls = tone === "income" ? "text-income" : tone === "expense" || (tone === "auto" && neg) ? "text-expense" : "";
-  const text = money(value, compact && !full);
+  const text = hidden ? "••••" : money(value, compact && !full);
   return compact
-    ? <button type="button" onClick={() => setFull(!full)} title={money(value)} className={cn("num whitespace-nowrap text-left", cls, className)}>{text}</button>
+    ? <button type="button" onClick={() => setFull(!full)} title={hidden ? "Balance hidden" : money(value)} className={cn("num whitespace-nowrap text-left", cls, className)}>{text}</button>
     : <span className={cn("num whitespace-nowrap", cls, className)}>{text}</span>;
 }
 
 /** Counts up once on mount; respects reduced motion. */
-export function CountUpMoney({ value, className }: { value: number; className?: string }) {
+export function CountUpMoney({ value, hidden = false, className }: { value: number; hidden?: boolean; className?: string }) {
   const [shown, setShown] = useState(value);
   const done = useRef(false);
   useEffect(() => {
@@ -31,7 +31,7 @@ export function CountUpMoney({ value, className }: { value: number; className?: 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [value]);
-  return <span className={cn("num", className)}>{money(shown)}</span>;
+  return <span className={cn("num", className)}>{hidden ? "••••" : money(shown)}</span>;
 }
 
 export function DeltaChip({ value, suffix, onDark }: { value: number; suffix?: string; onDark?: boolean }) {
@@ -62,11 +62,11 @@ export function CardLink({ to, children, search }: { to: string; children: React
   return <Link to={to as "/"} search={search as never} className="pressable inline-flex items-center gap-0.5 text-[13px] font-medium text-primary">{children}<ChevronRight className="size-4" /></Link>;
 }
 
-export function StatCard({ label, value, hint, tone, compact = true }: { label: string; value: number; hint?: string; tone?: "income" | "expense" | "plain"; compact?: boolean }) {
+export function StatCard({ label, value, hint, tone, compact = true, hidden = false }: { label: string; value: number; hint?: string; tone?: "income" | "expense" | "plain"; compact?: boolean; hidden?: boolean }) {
   return (
     <div className="min-w-0 rounded-[var(--radius-card)] bg-muted/60 p-4">
       <div className="truncate text-[12.5px] text-muted-foreground">{label}</div>
-      <MoneyText value={value} compact={compact} tone={tone ?? "auto"} className="mt-1 block text-[17px] font-semibold" />
+      <MoneyText value={value} compact={compact} hidden={hidden} tone={tone ?? "auto"} className="mt-1 block text-[17px] font-semibold" />
       {hint && <div className="mt-0.5 truncate text-[12px] text-muted-foreground">{hint}</div>}
     </div>
   );
@@ -143,4 +143,4 @@ export const chartTip = {
   labelStyle: { color: "var(--muted-foreground)" },
   formatter: (v: number) => money(v),
 };
-export function chartMoney(v: number) { const a = Math.abs(v); const sign = v < 0 ? "−" : ""; return `${sign}₹${a >= 1e7 ? `${+(a / 1e7).toFixed(1)}Cr` : a >= 1e5 ? `${+(a / 1e5).toFixed(1)}L` : a >= 1e3 ? `${+(a / 1e3).toFixed(0)}k` : Math.round(a)}`; }
+export function chartMoney(v: number) { const a = Math.abs(v); const sign = v < 0 ? "−" : ""; return `${sign}₹${a >= 1e7 ? `${+(a / 1e7).toFixed(1)}Cr` : a >= 1e5 ? `${+(a / 1e5).toFixed(1)}L` : a >= 1e3 ? `${+(a / 1e3).toFixed(0)}K` : Math.round(a)}`; }

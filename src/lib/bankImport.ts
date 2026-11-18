@@ -78,7 +78,7 @@ export function suggestBankRow(row: StagedBankRow, db: DB): StagedBankRow {
   return {...row,draft,reason,confidence};
 }
 function makeRow(date:string,amount:number,direction:"IN"|"OUT",description:string,accountId:string,sourceFile:string,extra:Partial<StagedBankRow>={}):StagedBankRow {
-  const parsed=parseNarration(description);const data={date,amount,direction,description,accountId,...parsed,...extra};const fingerprint=bankFingerprint(data);
+  const parsed=parseNarration(description);const data={date,amount,direction,accountId,...parsed,...extra};const fingerprint=bankFingerprint(data);
   return {...data,id:`BANK-${fingerprint}`,fingerprint,sourceFile,status:"PENDING",confidence:"Review",reason:"",draft:{}};
 }
 export function parseBankGrid(grid: unknown[][], accountId:string, sourceFile:string) {

@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChevronLeft, ChevronRight, Info, Pencil, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChevronLeft, ChevronRight, Columns2, Info, Pencil, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useDB, removeItem, upsert } from "@/lib/store";
 import { filterByPeriod, summarize } from "@/lib/accountingEngine";
 import { addMonths, fmtDate, inr, monthKey, monthLabel, todayISO } from "@/lib/format";
@@ -32,6 +33,41 @@ const QUICK = [
 ];
 const PAGE = 50;
 
+const ALL_COLS = [
+  { key: "description", label: "Description" }, { key: "amount", label: "Amount" }, { key: "type", label: "Type" },
+  { key: "mainCategory", label: "Category" }, { key: "subCategory", label: "Sub-category" }, { key: "account", label: "Account" },
+  { key: "toAccount", label: "To account" }, { key: "method", label: "Method" }, { key: "person", label: "Person" },
+  { key: "loan", label: "Loan / EMI" }, { key: "emiSplit", label: "EMI split (I / P)" }, { key: "essentialOrDiscretionary", label: "Essential?" },
+  { key: "needOrWant", label: "Need/Want" }, { key: "recurringOrOneTime", label: "Recurring?" }, { key: "personalOrBusiness", label: "Pers/Biz" },
+  { key: "fixedOrVariable", label: "Fixed/Var" }, { key: "referenceNumber", label: "Reference" }, { key: "source", label: "Source" }, { key: "notes", label: "Notes" },
+] as const;
+type ColKey = (typeof ALL_COLS)[number]["key"];
+const DEFAULT_COLS: ColKey[] = ["description", "amount", "type", "mainCategory", "account", "person", "source"];
+
+function cellOf(t: Transaction, k: ColKey, accountName: (id?: string) => string): React.ReactNode {
+  switch (k) {
+    case "description": return t.description || "—";
+    case "type": return t.type;
+    case "mainCategory": return t.mainCategory || "—";
+    case "subCategory": return t.subCategory || "—";
+    case "account": return accountName(t.accountId);
+    case "toAccount": return t.toAccountId ? accountName(t.toAccountId) : "—";
+    case "method": return t.paymentMethod;
+    case "person": return t.relatedPerson || "—";
+    case "loan": return t.relatedBorrowingId || t.relatedLendingId || t.relatedEmiId || t.relatedAssetId || "—";
+    case "emiSplit": return t.type === "EMI Payment" ? `${inr(t.interestComponent ?? 0)} / ${inr(t.principalComponent ?? 0)}` : "—";
+    case "essentialOrDiscretionary": return t.essentialOrDiscretionary ?? "—";
+    case "needOrWant": return t.needOrWant ?? "—";
+    case "recurringOrOneTime": return t.recurringOrOneTime ?? "—";
+    case "personalOrBusiness": return t.personalOrBusiness ?? "—";
+    case "fixedOrVariable": return t.fixedOrVariable ?? "—";
+    case "referenceNumber": return t.referenceNumber || "—";
+    case "source": return t.source;
+    case "notes": return t.notes || "";
+    default: return "—";
+  }
+}
+
 const DIR = {
   IN: { icon: ArrowDownLeft, cls: "text-success", sign: "+" },
   OUT: { icon: ArrowUpRight, cls: "text-destructive", sign: "−" },
@@ -53,6 +89,11 @@ function Register() {
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [confirming, setConfirming] = useState<Transaction | null>(null);
   const [limit, setLimit] = useState(PAGE);
+  const [cols, setCols] = useState<ColKey[]>(() => {
+    try { const raw = localStorage.getItem("kanakku-tx-cols"); if (raw) { const p = JSON.parse(raw) as ColKey[]; if (Array.isArray(p) && p.length) return p; } } catch { /* ignore */ }
+    return DEFAULT_COLS;
+  });
+  useEffect(() => { localStorage.setItem("kanakku-tx-cols", JSON.stringify(cols)); }, [cols]);
   const name = (id?: string) => db.accounts.find((a) => a.id === id)?.name ?? "—";
 
   const rows = useMemo(() => {
@@ -103,20 +144,47 @@ function Register() {
     toast("Transaction deleted", { action: { label: "Undo", onClick: () => upsert("transactions", t) } });
   };
 
-  const txRows: [string, React.ReactNode][] = selected ? [
-    ["Amount", `${dirOf(selected).sign}${inr(selected.amount)}`],
-    ["Type", selected.type],
-    ["Date", fmtDate(selected.date)],
-    ["Category", [selected.mainCategory, selected.subCategory].filter(Boolean).join(" › ") || "—"],
-    ["Account", selected.toAccountId ? `${name(selected.accountId)} → ${name(selected.toAccountId)}` : name(selected.accountId)],
-    ["Method", selected.paymentMethod],
-    ["Person", selected.relatedPerson || "—"],
-    ["Loan / EMI", selected.relatedBorrowingId || selected.relatedLendingId || selected.relatedEmiId || selected.relatedAssetId || "—"],
-    ["EMI split (I / P)", selected.type === "EMI Payment" ? `${inr(selected.interestComponent ?? 0)} / ${inr(selected.principalComponent ?? 0)}` : "—"],
-    ["Reference", selected.referenceNumber || "—"],
-    ["Source", selected.source],
-    ["Notes", selected.notes || "—"],
-  ] : [];
+  const txRows = (() => {
+    if (!selected) return [] as { group: string; rows: [string, React.ReactNode][] }[];
+    const t = selected;
+    const has = (v: unknown) => v !== undefined && v !== "" && v !== null;
+    const basics: [string, React.ReactNode][] = [
+      has(t.description) && ["Description", t.description!],
+      ["Amount", `${dirOf(t).sign}${inr(t.amount)}`],
+      ["Type", t.type],
+      ["Date", fmtDate(t.date)],
+      has(t.referenceNumber) && ["Reference", t.referenceNumber!],
+    ].filter(Boolean) as [string, React.ReactNode][];
+    const accounts: [string, React.ReactNode][] = [
+      t.toAccountId ? ["From → To", `${name(t.accountId)} → ${name(t.toAccountId)}`] : ["Account", name(t.accountId)],
+      ["Method", t.paymentMethod],
+      has(t.relatedPerson) && ["Person", t.relatedPerson!],
+    ].filter(Boolean) as [string, React.ReactNode][];
+    const loanId = t.relatedBorrowingId || t.relatedLendingId || t.relatedEmiId || t.relatedAssetId;
+    const linked: [string, React.ReactNode][] = [
+      loanId && ["Loan / EMI", loanId],
+      t.loanPeriod && ["Period", `P${t.loanPeriod}`],
+      t.type === "EMI Payment" && ["EMI split (I / P)", `${inr(t.interestComponent ?? 0)} / ${inr(t.principalComponent ?? 0)}`],
+    ].filter(Boolean) as [string, React.ReactNode][];
+    const tags: [string, React.ReactNode][] = [
+      has(t.essentialOrDiscretionary) && ["Essential?", t.essentialOrDiscretionary!],
+      has(t.needOrWant) && ["Need / Want", t.needOrWant!],
+      has(t.recurringOrOneTime) && ["Recurring?", t.recurringOrOneTime!],
+      has(t.personalOrBusiness) && ["Personal / Business", t.personalOrBusiness!],
+      has(t.fixedOrVariable) && ["Fixed / Variable", t.fixedOrVariable!],
+      (has(t.mainCategory) || has(t.subCategory)) && ["Category", [t.mainCategory, t.subCategory].filter(Boolean).join(" › ")],
+    ].filter(Boolean) as [string, React.ReactNode][];
+    const audit: [string, React.ReactNode][] = [
+      ["Source", t.source],
+      has(t.notes) && ["Notes", t.notes!],
+    ].filter(Boolean) as [string, React.ReactNode][];
+    return [
+      { group: "Basics", rows: basics }, { group: "Accounts", rows: accounts },
+      linked.length && { group: "Linked loan", rows: linked },
+      tags.length && { group: "Budget tags", rows: tags },
+      audit.length && { group: "Audit", rows: audit },
+    ].filter(Boolean) as { group: string; rows: [string, React.ReactNode][] }[];
+  })();
 
   return (
     <div>
@@ -190,31 +258,29 @@ function Register() {
 
       {/* Desktop: full register, scrolls with the page */}
       <div className="hidden lg:block">
-        <Table empty={!rows.length} head={["Date", "Description", "Amount", "Type", "Category", "Sub-category", "Account", "To account", "Method", "Person", "Loan / EMI", "EMI split (I / P)", "Essential?", "Need/Want", "Recurring?", "Pers/Biz", "Fixed/Var", "Reference", "Source", "Notes"]}>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Columns2 /> Columns {cols.length < ALL_COLS.length ? `(${cols.length}/${ALL_COLS.length})` : ""}</Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+              {ALL_COLS.map((c) => (
+                <DropdownMenuCheckboxItem key={c.key} checked={cols.includes(c.key)} onCheckedChange={(v) => setCols(v ? [...cols, c.key] : cols.filter((x) => x !== c.key))} disabled={c.key === "description" || c.key === "amount"}>
+                  {c.label}{(c.key === "description" || c.key === "amount") && " (pinned)"}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <span className="text-xs text-muted-foreground">Tap any row for the full entry</span>
+        </div>
+        <Table empty={!rows.length} head={["Date", ...cols.map((k) => ALL_COLS.find((c) => c.key === k)!.label)]}>
           {rows.map((t) => {
             const d = dirOf(t);
             return (
               <tr key={t.id} className="cursor-pointer" onClick={() => setSelected(t)}>
-                <td className="num whitespace-nowrap">{fmtDate(t.date)}</td>
-                <td className="max-w-64 truncate font-medium">{t.description || <span className="text-muted-foreground">—</span>}</td>
-                <td className={cn("num text-right font-semibold whitespace-nowrap", d.cls)}>{d.sign}{inr(t.amount)}</td>
-                <td className="whitespace-nowrap">{t.type}</td>
-                <td>{t.mainCategory || "—"}</td>
-                <td>{t.subCategory || "—"}</td>
-                <td>{name(t.accountId)}</td>
-                <td>{t.toAccountId ? name(t.toAccountId) : "—"}</td>
-                <td>{t.paymentMethod}</td>
-                <td>{t.relatedPerson || "—"}</td>
-                <td className="num text-xs text-muted-foreground">{t.relatedBorrowingId || t.relatedLendingId || t.relatedEmiId || t.relatedAssetId || "—"}</td>
-                <td className="num text-xs">{t.type === "EMI Payment" ? `${inr(t.interestComponent ?? 0)} / ${inr(t.principalComponent ?? 0)}` : "—"}</td>
-                <td>{t.essentialOrDiscretionary ?? "—"}</td>
-                <td>{t.needOrWant ?? "—"}</td>
-                <td>{t.recurringOrOneTime ?? "—"}</td>
-                <td>{t.personalOrBusiness ?? "—"}</td>
-                <td>{t.fixedOrVariable ?? "—"}</td>
-                <td className="num text-xs text-muted-foreground">{t.referenceNumber || "—"}</td>
-                <td className="text-xs text-muted-foreground">{t.source}</td>
-                <td className="max-w-48 truncate text-xs text-muted-foreground">{t.notes || ""}</td>
+                <td className="num whitespace-nowrap border-r bg-surface sticky left-0 z-[1]">{fmtDate(t.date)}</td>                {cols.map((k) => {
+                  if (k === "description") return <td key={k} className="sticky left-[7.5rem] z-[1] max-w-64 truncate border-r bg-surface font-medium">{t.description || <span className="text-muted-foreground">—</span>}</td>;
+                  if (k === "amount") return <td key={k} className={cn("num text-right font-semibold whitespace-nowrap border-r bg-surface", d.cls)}>{d.sign}{inr(t.amount)}</td>;
+                  return <td key={k} className="whitespace-nowrap">{cellOf(t, k, name)}</td>;
+                })}
               </tr>
             );
           })}
@@ -253,10 +319,15 @@ function Register() {
             <DrawerTitle className="text-[17px]">{selected?.description || selected?.type}</DrawerTitle>
             <DrawerDescription>{selected && `${fmtDate(selected.date)} · ${dirOf(selected).sign}${inr(selected.amount)}`}</DrawerDescription>
           </DrawerHeader>
-          <div className="max-h-[50vh] space-y-1 overflow-y-auto px-5">
-            {txRows.map(([l, v]) => (
-              <div key={l} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-3 border-b py-2 text-sm last:border-0">
-                <span className="text-muted-foreground">{l}</span><span className="break-words">{v}</span>
+          <div className="max-h-[50vh] space-y-4 overflow-y-auto px-5">
+            {txRows.map(({ group, rows }) => (
+              <div key={group}>
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{group}</div>
+                {rows.map(([l, v]) => (
+                  <div key={l} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-3 border-b py-2 text-sm last:border-0">
+                    <span className="text-muted-foreground">{l}</span><span className="break-words">{v}</span>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
@@ -289,7 +360,7 @@ function Register() {
 function SummaryCard({ label, value, tone, tip }: { label: string; value: string; tone?: string; tip?: string }) {
   return (
     <div className="panel p-3.5">
-      <div className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}{tip && <Info className="size-3.5 shrink-0 cursor-help" aria-label={tip} title={tip} />}</div>
+      <div className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}{tip && <span title={tip} aria-label={tip} className="cursor-help"><Info className="size-3.5 shrink-0" /></span>}</div>
       <div className={cn("num mt-1.5 text-lg font-semibold md:text-xl", tone)}>{value}</div>
     </div>
   );

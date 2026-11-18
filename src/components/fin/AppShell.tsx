@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Home, ListOrdered, Landmark, Target, FileChartColumn, Settings, Moon, Sun, Plus, Inbox, HandCoins, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Upload, UserRound, Eye, EyeOff } from "lucide-react";
+import { Home, ListOrdered, Landmark, Target, FileChartColumn, Settings, Moon, Sun, Plus, Inbox, HandCoins, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Upload, UserRound, Eye, EyeOff, TrendingUp } from "lucide-react";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
@@ -93,7 +93,8 @@ const ADD_OPTIONS = [
   { key: "expense", label: "Expense", icon: ArrowUpRight, tone: "text-expense bg-expense/10" },
   { key: "income", label: "Income", icon: ArrowDownLeft, tone: "text-income bg-income/10" },
   { key: "transfer", label: "Transfer", icon: ArrowLeftRight, tone: "text-info bg-info/10" },
-  { key: "loan", label: "Lend / Borrow", icon: HandCoins, tone: "text-warning bg-warning/10" },
+  { key: "loan", label: "Loans", icon: HandCoins, tone: "text-warning bg-warning/10" },
+  { key: "assets", label: "Invest / Assets", icon: TrendingUp, tone: "text-success bg-success/10" },
   { key: "import", label: "Import statement", icon: Upload, tone: "text-primary bg-accent" },
 ] as const;
 
@@ -140,8 +141,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const pick = (k: (typeof ADD_OPTIONS)[number]["key"]) => {
     setSheet(false);
-    if (k === "loan") return navigate({ to: "/loans" });
     if (k === "import") return navigate({ to: "/bank-sync" });
+    if (k === "loan") return setEntry({ type: "Money Borrowed" });
+    if (k === "assets") return setEntry({ type: "Investment Purchase" });
     setEntry({ type: k === "expense" ? "Daily Expense" : k === "income" ? "Salary Income" : "Transfer Between Own Accounts" });
   };
   return (

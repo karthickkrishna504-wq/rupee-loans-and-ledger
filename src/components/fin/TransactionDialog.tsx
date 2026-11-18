@@ -1,19 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "./ui";
 import { useDB, saveTx, uid, upsert, setDB } from "@/lib/store";
 import { TX_TYPES, txMeta, type Transaction, type TxType } from "@/lib/types";
 import { methodsForAccount, loanInterestDescription, periodForInterestDate } from "@/lib/txHelpers";
 import { emiSchedule, loanSummary } from "@/lib/accountingEngine";
-import { inr, todayISO } from "@/lib/format";
+import { inr, todayISO, fmtDate } from "@/lib/format";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles, LoaderCircle, UserRound } from "lucide-react";
+import { Sparkles, LoaderCircle, UserRound, Search } from "lucide-react";
 import { suggestTransaction } from "@/lib/suggestions.functions";
 import type { TransactionSuggestion } from "@/lib/transactionSuggestion";
 
 type Draft = Partial<Transaction> & { type: TxType };
+
+const GROUPS = {
+  expense: { title: "Expense entry", types: ["Daily Expense", "Household Expense", "Business Expense", "Refund Received"] },
+  income: { title: "Income entry", types: ["Salary Income", "Business Income", "Freelance Income", "Rental Income", "Dividend/Investment Income", "Other Income"] },
+  transfer: { title: "Transfer entry", types: ["Transfer Between Own Accounts"] },
+  loan: { title: "Loan entry", types: ["Money Borrowed", "Interest Paid on Borrowing", "Principal Repayment on Borrowing", "Money Lent to Another Person", "Interest Received from Money Lent", "Principal Received from Borrower", "EMI Payment"] },
+  assets: { title: "Investment & assets", types: ["Investment Purchase", "Investment Sale", "Asset Purchase", "Asset Sale"] },
+} as const satisfies Record<string, { title: string; types: TxType[] }>;
+type GroupKey = keyof typeof GROUPS;
+const groupOf = (t: TxType): GroupKey => (GROUPS.expense.types.includes(t) ? "expense" : GROUPS.income.types.includes(t) ? "income" : t === "Transfer Between Own Accounts" ? "transfer" : GROUPS.loan.types.includes(t) ? "loan" : "assets");
 
 const blank = (accountId = ""): Draft => ({
   type: "Daily Expense", date: todayISO(), amount: 0, accountId, paymentMethod: "UPI", mainCategory: "", subCategory: "", description: "", source: "Manual",
@@ -31,6 +42,8 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeFrom, setMergeFrom] = useState("");
   const [mergeInto, setMergeInto] = useState("");
+  const [catSheet, setCatSheet] = useState(false);
+  const [catQuery, setCatQuery] = useState("");
   useEffect(() => { if (open) { setSuggestion(null); setSuggestionError(""); } }, [open]);
   async function getSuggestion() {
     setSuggesting(true); setSuggestion(null); setSuggestionError("");
@@ -50,6 +63,9 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
   useEffect(() => { if (open) setD({ ...blank(db.accounts[0]?.id), ...initial } as Draft); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const meta = txMeta(d.type);
+  const group = groupOf(d.type);
+  const groupTypes = GROUPS[group].types;
+  const dialogTitle = d.id ? "Edit transaction" : GROUPS[group].title;
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
   const isExpense = meta.nature === "EXPENSE" || meta.nature === "REFUND";
   const isTransfer = meta.dir === "TRANSFER";
@@ -74,6 +90,7 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
   }, [isLoanInterest, linkedLoan, d.id, d.date, db.transactions, d.description]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loanList = useMemo(() => {
+    if (meta.link === "lending") return db.lendings.map((l) => ({ id: l.loanId, kind: "lending" as const, label: `${l.loanId} · ${l.counterparty}`, person: l.counterparty }));
     const b = db.borrowings.map((l) => ({ id: l.loanId, kind: "borrowing" as const, label: `${l.loanId} · ${l.counterparty}`, person: l.counterparty }));
     const e = db.emiLoans.map((l) => ({ id: l.loanId, kind: "emi" as const, label: `${l.loanId} · ${l.lender} (${l.loanType} EMI)`, person: l.lender }));
     if (meta.link === "borrowing") return b;
@@ -167,12 +184,13 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
     onOpenChange(false);
   }
 
-  const effect = { INCOME: "Counts as income", EXPENSE: "Counts as expense", LIABILITY: "Changes loan principal only — not income/expense", ASSET: "Converts cash to asset/receivable — not income/expense", EMI: "Interest part = expense, principal part reduces loan", NEUTRAL: "Zero impact on income & expense", REFUND: "Offsets spending in its category" }[meta.nature];
+  const effect = { INCOME: "Counts as income", EXPENSE: "Counts as expense", LIABILITY: "Changes loan principal only — not income/expense", ASSET: "Moves cash into an asset. Net worth unchanged.", EMI: "Interest part = expense, principal part reduces loan", NEUTRAL: "Zero impact on income & expense", REFUND: "Reduces that category's spending — not income" }[meta.nature];
+  const refundable = db.transactions.filter((t) => (txMeta(t.type).nature === "EXPENSE") && (d.mainCategory ? t.mainCategory === d.mainCategory : true)).slice(0, 30);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
-        <DialogHeader><DialogTitle>{d.id ? "Edit transaction" : "New transaction"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{dialogTitle}</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="border-b pb-4 sm:col-span-2">
             <Field label="Transaction description"><Input value={d.description ?? ""} placeholder="e.g. Paid ₹1,200 for office internet" onChange={(e) => { set({ description: e.target.value }); setSuggestion(null); }} /></Field>
@@ -181,11 +199,25 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
             {suggestion && <div className="mt-3 rounded-md border border-primary/20 bg-primary/5 p-3"><div className="text-xs font-semibold">{suggestion.type} · {suggestion.mainCategory || "Uncategorised"}</div><div className="mt-2 flex flex-wrap gap-1">{[suggestion.personalOrBusiness, suggestion.essentialOrDiscretionary, suggestion.needOrWant, suggestion.recurringOrOneTime, suggestion.fixedOrVariable].filter(Boolean).map((t) => <span key={t} className="rounded-full bg-muted px-2 py-1 text-[10px]">{t}</span>)}</div><Button size="sm" className="mt-3" onClick={applySuggestion}>Apply suggestion</Button></div>}
           </div>
           <Field label="Type" className="sm:col-span-2">
+            <button type="button" onClick={() => setCatSheet(true)} className="mb-1 text-left text-[11px] text-primary underline underline-offset-2">Change Category</button>
             <Select value={d.type} onChange={(e) => set({ type: e.target.value as TxType, relatedBorrowingId: undefined, relatedLendingId: undefined, relatedEmiId: undefined, mainCategory: "", subCategory: "" })}>
-              {TX_TYPES.map((t) => <option key={t.type}>{t.type}</option>)}
+              {groupTypes.map((t) => <option key={t}>{t}</option>)}
             </Select>
             <span className="mt-1 block text-xs text-primary">{effect}</span>
           </Field>
+
+          {d.type === "Refund Received" && (
+            <Field label="Original expense (optional)" className="sm:col-span-2">
+              <Select value={d.relatedOriginalTxId ?? ""} onChange={(e) => {
+                const orig = db.transactions.find((t) => t.id === e.target.value);
+                set({ relatedOriginalTxId: e.target.value || undefined, mainCategory: orig?.mainCategory ?? d.mainCategory, subCategory: orig?.subCategory ?? d.subCategory });
+              }}>
+                <option value="">—</option>
+                {refundable.map((t) => <option key={t.id} value={t.id}>{fmtDate(t.date)} · {t.description || t.type} · {inr(t.amount)}</option>)}
+              </Select>
+              <span className="mt-1 block text-xs text-muted-foreground">The refund reduces that category's spending instead of counting as income.</span>
+            </Field>
+          )}
 
           {loanList.length > 0 || meta.link ? (
             meta.link !== "asset" && (
@@ -264,7 +296,7 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
           )}
           <Field label="Reference (UTR / receipt)"><Input value={d.referenceNumber ?? ""} onChange={(e) => set({ referenceNumber: e.target.value })} /></Field>
 
-          {isExpense && (
+          {isExpense && d.type !== "Refund Received" && (
             <div className="grid grid-cols-2 gap-3 sm:col-span-2 sm:grid-cols-5">
               {([
                 ["essentialOrDiscretionary", ["Essential", "Discretionary"]],
@@ -298,6 +330,31 @@ export function TransactionDialog({ open, onOpenChange, initial }: { open: boole
           </DialogContent>
         </Dialog>
       </DialogContent>
+
+      {/* Category switcher sheet: full grouped, searchable list */}
+      <Drawer open={catSheet} onOpenChange={setCatSheet}>
+        <DrawerContent className="rounded-t-[var(--radius-card)] border-0 bg-card">
+          <DrawerHeader className="text-left"><DrawerTitle className="text-[17px]">Change Category</DrawerTitle><DrawerDescription>Pick any entry type across all groups.</DrawerDescription></DrawerHeader>
+          <div className="px-5 pb-2"><div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input className="pl-9" placeholder="Search types…" value={catQuery} onChange={(e) => setCatQuery(e.target.value)} />
+          </div></div>
+          <div className="max-h-[50vh] overflow-y-auto px-5 pb-8">
+            {(Object.entries(GROUPS) as [GroupKey, { title: string; types: TxType[] }][]).map(([key, g]) => {
+              const types = g.types.filter((t) => t.toLowerCase().includes(catQuery.toLowerCase()));
+              if (!types.length) return null;
+              return (
+                <div key={key} className="mb-3">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.title}</div>
+                  {types.map((t) => (
+                    <button key={t} onClick={() => { set({ type: t, relatedBorrowingId: undefined, relatedLendingId: undefined, relatedEmiId: undefined, mainCategory: "", subCategory: "" }); setCatSheet(false); setCatQuery(""); }} className={cn("pressable block w-full rounded-[var(--radius)] px-3 py-2.5 text-left text-[14px] hover:bg-muted", d.type === t && "bg-accent font-medium")}>{t}</button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </Dialog>
   );
 }

@@ -8,6 +8,7 @@ import { useDB, saveTx, uid, upsert, setDB } from "@/lib/store";
 import { TX_TYPES, txMeta, type Transaction, type TxType } from "@/lib/types";
 import { methodsForAccount, loanInterestDescription, periodForInterestDate } from "@/lib/txHelpers";
 import { emiSchedule, loanSummary } from "@/lib/accountingEngine";
+import { cn } from "@/lib/utils";
 import { inr, todayISO, fmtDate } from "@/lib/format";
 import { useServerFn } from "@tanstack/react-start";
 import { Sparkles, LoaderCircle, UserRound, Search } from "lucide-react";
@@ -24,7 +25,13 @@ const GROUPS = {
   assets: { title: "Investment & assets", types: ["Investment Purchase", "Investment Sale", "Asset Purchase", "Asset Sale"] },
 } as const satisfies Record<string, { title: string; types: TxType[] }>;
 type GroupKey = keyof typeof GROUPS;
-const groupOf = (t: TxType): GroupKey => (GROUPS.expense.types.includes(t) ? "expense" : GROUPS.income.types.includes(t) ? "income" : t === "Transfer Between Own Accounts" ? "transfer" : GROUPS.loan.types.includes(t) ? "loan" : "assets");
+const groupOf = (t: TxType): GroupKey => {
+  if ((GROUPS.expense.types as readonly TxType[]).includes(t)) return "expense";
+  if ((GROUPS.income.types as readonly TxType[]).includes(t)) return "income";
+  if (t === "Transfer Between Own Accounts") return "transfer";
+  if ((GROUPS.loan.types as readonly TxType[]).includes(t)) return "loan";
+  return "assets";
+};
 
 const blank = (accountId = ""): Draft => ({
   type: "Daily Expense", date: todayISO(), amount: 0, accountId, paymentMethod: "UPI", mainCategory: "", subCategory: "", description: "", source: "Manual",

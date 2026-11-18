@@ -17,7 +17,10 @@ export function deriveDateFields(date: string) {
 
 /* ---------------- Income / Expense classification ---------------- */
 export function incomeOf(t: Transaction) {
-  return txMeta(t.type).nature === "INCOME" ? t.amount : 0;
+  const n = txMeta(t.type).nature;
+  if (n === "INCOME") return t.amount;
+  if (n === "ASSET" && (t.type === "Investment Sale" || t.type === "Asset Sale")) return t.profitOnSale ?? 0;
+  return 0;
 }
 export function expenseOf(t: Transaction) {
   const n = txMeta(t.type).nature;

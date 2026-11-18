@@ -63,6 +63,8 @@ export interface Transaction {
   relatedLendingId?: string;
   relatedEmiId?: string;
   relatedAssetId?: string;
+  relatedOriginalTxId?: string; // refund: the expense this refund reverses
+  profitOnSale?: number; // asset/investment sale: gain recorded as income
   interestComponent?: number; // EMI split
   principalComponent?: number; // EMI split
   essentialOrDiscretionary?: "Essential" | "Discretionary";
